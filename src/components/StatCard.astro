@@ -1,0 +1,40 @@
+---
+interface Props {
+  value: string;
+  label: string;
+  trend?: 'up' | 'down' | 'neutral';
+  trendValue?: string;
+  color?: 'brand' | 'safe' | 'warn' | 'danger' | 'default';
+}
+
+const { value, label, trend, trendValue, color = 'default' } = Astro.props;
+
+const colorMap = {
+  brand: 'text-brand-500',
+  safe: 'text-delay-safe',
+  warn: 'text-delay-warn',
+  danger: 'text-delay-danger',
+  default: 'text-ink',
+};
+
+const trendColorMap = {
+  up: 'text-delay-danger',
+  down: 'text-delay-safe',
+  neutral: 'text-ink-faint',
+};
+---
+<div class="bg-surface-raised rounded-xl border border-border p-4 md:p-5">
+  <div class="flex items-start justify-between mb-1">
+    <p class={`stat-value text-[1.75rem] ${colorMap[color]}`}>{value}</p>
+    {trend && trendValue && (
+      <span class={`font-ticket text-[0.6875rem] font-medium ${trendColorMap[trend]} flex items-center gap-0.5`}>
+        {trend === 'up' && '↑'}
+        {trend === 'down' && '↓'}
+        {trend === 'neutral' && '→'}
+        {trendValue}
+      </span>
+    )}
+  </div>
+  <p class="font-ticket text-[0.625rem] text-ink-faint tracking-wider uppercase">{label}</p>
+  <slot />
+</div>

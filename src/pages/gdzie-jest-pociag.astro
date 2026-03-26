@@ -1,0 +1,275 @@
+---
+import Base from '../layouts/Base.astro';
+import StatCard from '../components/StatCard.astro';
+import StationTimeline from '../components/StationTimeline.astro';
+
+const stations = [
+  { name: 'Kraków Główny', plannedDep: '11:10', actualDep: '11:14', delay: 4, passed: true, current: false },
+  { name: 'Miechów', plannedArr: '11:42', actualArr: '11:49', delay: 7, passed: true, current: false },
+  { name: 'Kielce', plannedArr: '12:31', actualArr: '12:49', delay: 18, passed: true, current: true },
+  { name: 'Radom', plannedArr: '13:08', delay: 0, passed: false, current: false },
+  { name: 'Warszawa Centralna', plannedArr: '13:45', delay: 0, passed: false, current: false },
+];
+---
+<Base
+  title="Gdzie jest pociąg — śledzenie pociągu na żywo"
+  description="Sprawdź gdzie jest Twój pociąg. Śledzenie pociągów PKP Intercity, Polregio, SKM i KM w czasie rzeczywistym. Wpisz numer pociągu i zobacz aktualne opóźnienie."
+>
+  <slot name="head">
+    <script type="application/ld+json" set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "name": "Gdzie jest pociąg — śledzenie pociągu na żywo",
+      "description": "Sprawdź gdzie jest Twój pociąg. Śledzenie w czasie rzeczywistym z dokładnością co do minuty.",
+      "url": "https://niejedzie.pl/gdzie-jest-pociag",
+      "isPartOf": { "@type": "WebSite", "name": "niejedzie.pl", "url": "https://niejedzie.pl" }
+    })} />
+  </slot>
+
+  <!-- Hero — search -->
+  <section class="relative overflow-hidden bg-surface-dark">
+    <div class="max-w-5xl mx-auto px-5 pt-16 pb-20 text-center">
+      <p class="section-label text-brand-300 mb-5">// śledzenie pociągu</p>
+      <h1 class="text-[2.25rem] md:text-[3rem] font-extrabold text-white leading-[1.05] tracking-tight mb-4">
+        Gdzie jest <span class="text-brand-300">pociąg</span>?
+      </h1>
+      <p class="text-[1rem] text-white/50 max-w-md mx-auto leading-relaxed mb-10">
+        Wpisz numer pociągu i&nbsp;sprawdź aktualną pozycję, opóźnienie i&nbsp;przystanki na trasie.
+      </p>
+
+      <div class="max-w-md mx-auto">
+        <form class="flex gap-2.5" id="train-search-form">
+          <input
+            type="text"
+            placeholder="Wpisz numer pociągu"
+            class="input input-mono text-center text-lg"
+            id="train-search-input"
+            autocomplete="off"
+          />
+          <button type="submit" class="btn-primary shrink-0 px-6">Szukaj</button>
+        </form>
+        <p class="font-ticket text-[0.625rem] text-white/30 mt-4 tracking-wider uppercase">
+          np. IC 5313 &middot; EIC 1701 &middot; TLK 38103 &middot; R 94531
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Mock result for IC 5313 -->
+  <section class="max-w-5xl mx-auto px-5 -mt-4 mb-8">
+    <div class="max-w-2xl mx-auto">
+
+      <!-- Train header card -->
+      <div class="ticket-card rounded-2xl overflow-hidden shadow-lg mb-6">
+        <div class="p-5 pb-4">
+          <div class="flex items-center justify-between mb-3">
+            <div class="flex items-center gap-2.5">
+              <span class="font-ticket font-semibold text-[1rem] text-ink">IC 5313</span>
+              <span class="text-[0.75rem] text-ink-muted">&middot;</span>
+              <span class="text-[0.8125rem] text-ink-muted font-medium">PKP Intercity</span>
+            </div>
+            <span class="font-ticket text-[0.6875rem] text-ink-faint">26.03.2026</span>
+          </div>
+
+          <div class="route-line mb-4">
+            <div class="text-right min-w-[5rem]">
+              <div class="font-ticket font-medium text-[0.875rem] text-ink">11:10</div>
+              <div class="text-[0.6875rem] text-ink-faint">Kraków Gł.</div>
+            </div>
+            <div class="route-dot bg-brand-500"></div>
+            <div class="route-dash"></div>
+            <div class="route-duration">2h 35m</div>
+            <div class="route-dash"></div>
+            <div class="route-dot bg-ink-faint"></div>
+            <div class="min-w-[5rem]">
+              <div class="font-ticket font-medium text-[0.875rem] text-ink">
+                <span class="line-through text-ink-faint decoration-ink-faint/50">13:45</span>
+                <span class="text-delay-warn ml-1">~14:03</span>
+              </div>
+              <div class="text-[0.6875rem] text-ink-faint">Warszawa C.</div>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-3">
+            <span class="badge badge-warn">+18 min</span>
+            <span class="text-[0.75rem] text-ink-faint">Ostatnia pozycja: Kielce</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Station timeline -->
+      <div class="bg-surface-raised rounded-2xl border border-border p-5 mb-6">
+        <p class="section-label mb-5">// trasa pociągu</p>
+        <StationTimeline stations={stations} />
+      </div>
+
+      <!-- Delay progression chart -->
+      <div class="bg-surface-raised rounded-2xl border border-border p-5 mb-6">
+        <p class="section-label mb-2">// narastanie opóźnienia</p>
+        <p class="text-[0.8125rem] text-ink-muted mb-4">Jak rosło opóźnienie na kolejnych stacjach</p>
+        <div id="delay-progression-chart" style="min-height: 200px;"></div>
+      </div>
+
+      <!-- Stats row -->
+      <div class="grid grid-cols-3 gap-3 mb-6">
+        <StatCard value="+18" label="Opóźnienie (min)" color="danger" />
+        <StatCard value="3/5" label="Przystanki" color="brand" />
+        <StatCard value="~14:03" label="Szac. przyjazd" color="warn" />
+      </div>
+
+      <!-- CTA card -->
+      <div class="ticket-card rounded-2xl overflow-hidden shadow-lg">
+        <div class="p-6 bg-brand-50 border-t border-brand-200 text-center">
+          <p class="text-[1.0625rem] font-bold text-ink mb-2 tracking-tight">Masz przesiadkę z tym pociągiem?</p>
+          <p class="text-[0.875rem] text-ink-muted mb-5">Włącz monitoring i&nbsp;dostaniesz alert jeśli opóźnienie zagrozi Twojemu połączeniu.</p>
+          <a href="/" class="btn-primary">Monitoruj przesiadkę</a>
+          <p class="text-center text-[0.6875rem] text-ink-faint mt-3">
+            Jednorazowo 5 zł lub <a href="/cennik" class="underline underline-offset-2 hover:text-ink transition-colors">15 zł/msc bez limitu</a>
+          </p>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- SEO content -->
+  <section class="max-w-5xl mx-auto px-5 py-16 fade-up">
+    <div class="max-w-2xl mx-auto">
+      <h2 class="text-[1.5rem] font-extrabold text-ink tracking-tight mb-4">Jak sprawdzić gdzie jest pociąg?</h2>
+      <div class="space-y-4 text-[0.9375rem] text-ink-secondary leading-relaxed">
+        <p>
+          Wpisz numer pociągu w&nbsp;wyszukiwarkę powyżej — pokażemy Ci aktualną pozycję, opóźnienie na każdej stacji oraz szacowany czas przyjazdu. Dane pochodzą z&nbsp;systemu PKP PLK i&nbsp;są odświeżane co minutę.
+        </p>
+        <p>
+          Numer pociągu znajdziesz na bilecie (np. <span class="font-ticket text-[0.8125rem]">IC 5313</span>), w&nbsp;aplikacji PKP Intercity lub na tablicy odjazdów na stacji. Obsługujemy wszystkich przewoźników: PKP Intercity, Polregio, SKM, Koleje Mazowieckie i&nbsp;innych.
+        </p>
+        <p>
+          Śledzenie pociągu jest <strong>całkowicie darmowe</strong>. Jeśli masz przesiadkę i&nbsp;chcesz otrzymać powiadomienie push gdy opóźnienie zagrozi połączeniu — skorzystaj z&nbsp;naszego <a href="/" class="text-brand-500 hover:text-brand-600 underline underline-offset-2 transition-colors">monitora przesiadek</a>.
+        </p>
+      </div>
+
+      <h3 class="text-[1.125rem] font-bold text-ink tracking-tight mt-8 mb-3">Często szukane pociągi</h3>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+        {['IC 5313', 'EIC 1701', 'TLK 38103', 'IC 350', 'EIC 1100', 'IC 6103', 'TLK 51100', 'R 94531'].map(train => (
+          <a href="/gdzie-jest-pociag" class="ticket-card rounded-lg p-3 text-center font-ticket text-[0.8125rem] font-medium text-ink hover:text-brand-500 transition-colors">
+            {train}
+          </a>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Bottom CTA -->
+  <section class="border-t border-border bg-surface-raised">
+    <div class="max-w-5xl mx-auto px-5 py-16">
+      <div class="max-w-md mx-auto text-center">
+        <h2 class="text-xl font-bold text-ink mb-2 tracking-tight">Sprawdź swoją przesiadkę</h2>
+        <p class="text-[0.875rem] text-ink-muted mb-5">Monitorujemy Twój pociąg i&nbsp;wyślemy alert jeśli opóźnienie zagrozi połączeniu.</p>
+        <a href="/" class="btn-primary">Sprawdź przesiadkę</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Delay progression chart script -->
+  <script>
+    import ApexCharts from 'apexcharts';
+
+    const chartEl = document.querySelector('#delay-progression-chart');
+    if (chartEl) {
+      const options = {
+        chart: {
+          type: 'area',
+          height: 200,
+          fontFamily: 'Outfit, system-ui, sans-serif',
+          background: 'transparent',
+          toolbar: { show: false },
+          zoom: { enabled: false },
+          animations: {
+            enabled: true,
+            easing: 'easeinout',
+            speed: 600,
+          },
+        },
+        series: [{
+          name: 'Opóźnienie',
+          data: [4, 7, 18],
+        }],
+        colors: ['#c2410c'],
+        fill: {
+          type: 'gradient',
+          gradient: {
+            shadeIntensity: 1,
+            opacityFrom: 0.4,
+            opacityTo: 0.05,
+            stops: [0, 90, 100],
+          },
+        },
+        stroke: {
+          curve: 'smooth',
+          width: 2.5,
+          lineCap: 'round',
+        },
+        grid: {
+          borderColor: '#e7e5e0',
+          strokeDashArray: 4,
+          padding: { left: 8, right: 8 },
+          xaxis: { lines: { show: false } },
+          yaxis: { lines: { show: true } },
+        },
+        xaxis: {
+          categories: ['Kraków Gł.', 'Miechów', 'Kielce'],
+          labels: {
+            style: {
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: '10px',
+              colors: '#a8a29e',
+            },
+          },
+          axisBorder: { show: true, color: '#e7e5e0' },
+          axisTicks: { show: false },
+        },
+        yaxis: {
+          min: 0,
+          max: 25,
+          labels: {
+            style: {
+              fontFamily: 'JetBrains Mono, monospace',
+              fontSize: '10px',
+              colors: '#a8a29e',
+            },
+            formatter: (val: number) => val + ' min',
+          },
+        },
+        tooltip: {
+          theme: 'light',
+          style: {
+            fontFamily: 'JetBrains Mono, monospace',
+            fontSize: '11px',
+          },
+          y: {
+            formatter: (val: number) => '+' + val + ' min',
+          },
+        },
+        dataLabels: {
+          enabled: true,
+          style: {
+            fontFamily: 'JetBrains Mono, monospace',
+            fontSize: '11px',
+            fontWeight: 600,
+          },
+          formatter: (val: number) => '+' + val,
+          offsetY: -6,
+          background: { enabled: false },
+        },
+        markers: {
+          size: 5,
+          colors: ['#c2410c'],
+          strokeColors: '#fff',
+          strokeWidth: 2,
+          hover: { size: 7 },
+        },
+      };
+      new ApexCharts(chartEl, options).render();
+    }
+  </script>
+</Base>

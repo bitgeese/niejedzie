@@ -1,0 +1,74 @@
+---
+interface Station {
+  name: string;
+  plannedArr?: string;
+  plannedDep?: string;
+  actualArr?: string;
+  actualDep?: string;
+  delay: number;
+  passed: boolean;
+  current: boolean;
+}
+
+interface Props {
+  stations: Station[];
+}
+
+const { stations } = Astro.props;
+
+function delayColor(delay: number): string {
+  if (delay === 0) return 'delay-safe';
+  if (delay <= 10) return 'delay-warn';
+  return 'delay-danger';
+}
+---
+<div class="space-y-0">
+  {stations.map((station, i) => (
+    <div class="flex items-start gap-3">
+      <!-- Timeline line + dot -->
+      <div class="flex flex-col items-center w-4 shrink-0">
+        <div class={`w-3 h-3 rounded-full border-2 mt-1 ${
+          station.current ? 'bg-brand-500 border-brand-500 ring-4 ring-brand-500/20' :
+          station.passed ? `bg-${delayColor(station.delay)} border-${delayColor(station.delay)}` :
+          'bg-surface-raised border-border-strong'
+        }`} />
+        {i < stations.length - 1 && (
+          <div class={`w-[2px] flex-1 min-h-[28px] ${
+            station.passed ? 'bg-brand-500/30' : 'bg-border'
+          }`} />
+        )}
+      </div>
+
+      <!-- Station info -->
+      <div class="flex-1 flex items-start justify-between pb-3 min-w-0">
+        <div class="min-w-0">
+          <p class={`text-[0.8125rem] font-medium truncate ${station.current ? 'text-ink font-semibold' : station.passed ? 'text-ink' : 'text-ink-faint'}`}>
+            {station.name}
+          </p>
+          {!station.passed && !station.current && (
+            <p class="font-ticket text-[0.6875rem] text-ink-faint">
+              {station.plannedArr || station.plannedDep}
+            </p>
+          )}
+        </div>
+        <div class="text-right shrink-0 ml-3">
+          {(station.passed || station.current) && (
+            <div class="flex items-center gap-2">
+              <span class="font-ticket text-[0.75rem] text-ink-faint line-through">
+                {station.plannedArr || station.plannedDep}
+              </span>
+              <span class={`font-ticket text-[0.75rem] font-semibold text-${delayColor(station.delay)}`}>
+                {station.actualArr || station.actualDep || '~' + station.plannedArr}
+              </span>
+              {station.delay > 0 && (
+                <span class={`badge badge-${station.delay <= 10 ? 'warn' : 'danger'} text-[0.55rem] py-0`}>
+                  +{station.delay}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  ))}
+</div>

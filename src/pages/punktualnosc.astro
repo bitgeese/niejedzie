@@ -1,0 +1,529 @@
+---
+import Base from '../layouts/Base.astro';
+import StatCard from '../components/StatCard.astro';
+---
+<Base
+  title="Punktualność PKP — statystyki i rankingi"
+  description="Punktualność pociągów PKP w Polsce — statystyki miesięczne, ranking przewoźników, najgorsze i najlepsze trasy. Dane z PKP PLK."
+>
+  <slot name="head">
+    <script type="application/ld+json" set:html={JSON.stringify({
+      "@context": "https://schema.org",
+      "@type": "WebPage",
+      "name": "Punktualność PKP — statystyki",
+      "description": "Punktualność pociągów w Polsce. Statystyki miesięczne, rankingi przewoźników i tras.",
+      "url": "https://niejedzie.pl/punktualnosc",
+      "isPartOf": { "@type": "WebSite", "name": "niejedzie.pl", "url": "https://niejedzie.pl" },
+      "breadcrumb": {
+        "@type": "BreadcrumbList",
+        "itemListElement": [
+          { "@type": "ListItem", "position": 1, "name": "Strona główna", "item": "https://niejedzie.pl" },
+          { "@type": "ListItem", "position": 2, "name": "Punktualność", "item": "https://niejedzie.pl/punktualnosc" }
+        ]
+      }
+    })} />
+  </slot>
+
+  <!-- Hero -->
+  <section class="max-w-5xl mx-auto px-5 pt-12 pb-6">
+    <p class="section-label mb-4">// statystyki punktualności</p>
+    <h1 class="text-[2rem] md:text-[2.75rem] font-extrabold text-ink leading-[1.08] tracking-tight mb-3">
+      Punktualność <span class="text-brand-500">PKP</span>
+    </h1>
+    <p class="text-ink-muted text-[1.0625rem] max-w-lg leading-relaxed mb-2">
+      Jak punktualne są pociągi w Polsce? Sprawdź statystyki miesięczne, rankingi przewoźników i tras.
+    </p>
+    <p class="font-ticket text-[0.625rem] text-ink-faint tracking-wider uppercase">
+      Okres: kwiecień 2025 &mdash; marzec 2026 &middot; Źródło: PKP PLK Otwarte Dane Kolejowe
+    </p>
+  </section>
+
+  <!-- Overall gauge + key stats -->
+  <section class="max-w-5xl mx-auto px-5 py-6 fade-up">
+    <div class="grid md:grid-cols-3 gap-5">
+      <!-- Gauge -->
+      <div class="bg-surface-raised rounded-2xl border border-border p-5 md:p-7 flex flex-col items-center justify-center">
+        <p class="section-label mb-1.5">// ogólna punktualność</p>
+        <h2 class="text-lg font-bold text-ink tracking-tight mb-2">Punktualność sieci</h2>
+        <div id="overall-gauge" style="min-height: 240px; width: 100%;"></div>
+        <p class="font-ticket text-[0.625rem] text-ink-faint tracking-wider text-center mt-1">
+          Średnia z ostatnich 12 miesięcy
+        </p>
+      </div>
+
+      <!-- Key stats -->
+      <div class="md:col-span-2 grid grid-cols-2 gap-3">
+        <StatCard value="73,2%" label="Punktualność ogółem" color="warn" trend="down" trendValue="-1,8pp r/r" />
+        <StatCard value="6,7 min" label="Średnie opóźnienie" color="brand" trend="up" trendValue="+0,4 min" />
+        <StatCard value="85%" label="Najlepszy przewoźnik" color="safe">
+          <p class="font-ticket text-[0.5625rem] text-ink-faint mt-1 tracking-wider uppercase">SKM Trójmiasto</p>
+        </StatCard>
+        <StatCard value="68%" label="Najgorsza kategoria" color="danger">
+          <p class="font-ticket text-[0.5625rem] text-ink-faint mt-1 tracking-wider uppercase">TLK (twoje linie kolejowe)</p>
+        </StatCard>
+      </div>
+    </div>
+  </section>
+
+  <!-- Line chart — monthly punctuality -->
+  <section class="max-w-5xl mx-auto px-5 py-8 fade-up">
+    <div class="bg-surface-raised rounded-2xl border border-border p-5 md:p-7">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <p class="section-label mb-1.5">// trend miesięczny</p>
+          <h2 class="text-lg font-bold text-ink tracking-tight">Punktualność w ostatnich 12 miesiącach</h2>
+        </div>
+        <span class="font-ticket text-[0.625rem] text-ink-faint tracking-wider uppercase">% pociągów na czas</span>
+      </div>
+      <div id="monthly-line-chart" style="min-height: 300px;"></div>
+    </div>
+  </section>
+
+  <!-- Two bar charts side by side -->
+  <section class="max-w-5xl mx-auto px-5 py-8 fade-up">
+    <div class="grid md:grid-cols-2 gap-5">
+      <!-- By operator -->
+      <div class="bg-surface-raised rounded-2xl border border-border p-5 md:p-7">
+        <p class="section-label mb-1.5">// według przewoźnika</p>
+        <h2 class="text-lg font-bold text-ink tracking-tight mb-6">Punktualność przewoźników</h2>
+        <div id="operator-bar-chart" style="min-height: 280px;"></div>
+      </div>
+
+      <!-- By category -->
+      <div class="bg-surface-raised rounded-2xl border border-border p-5 md:p-7">
+        <p class="section-label mb-1.5">// według kategorii</p>
+        <h2 class="text-lg font-bold text-ink tracking-tight mb-6">Punktualność kategorii pociągów</h2>
+        <div id="category-bar-chart" style="min-height: 280px;"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Tables: worst and best routes -->
+  <section class="max-w-5xl mx-auto px-5 py-8 fade-up">
+    <div class="grid md:grid-cols-2 gap-5">
+
+      <!-- Worst routes -->
+      <div class="bg-surface-raised rounded-2xl border border-border p-5 md:p-7">
+        <p class="section-label mb-1.5">// najgorsze trasy</p>
+        <h2 class="text-lg font-bold text-ink tracking-tight mb-5">Trasy z największymi opóźnieniami</h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-[0.8125rem]">
+            <thead>
+              <tr class="border-b border-border">
+                <th class="text-left py-2.5 font-ticket text-[0.625rem] text-ink-faint tracking-wider uppercase font-medium">Trasa</th>
+                <th class="text-right py-2.5 font-ticket text-[0.625rem] text-ink-faint tracking-wider uppercase font-medium">Śr. opóźn.</th>
+                <th class="text-right py-2.5 font-ticket text-[0.625rem] text-ink-faint tracking-wider uppercase font-medium">Punkt.</th>
+                <th class="text-right py-2.5 font-ticket text-[0.625rem] text-ink-faint tracking-wider uppercase font-medium">Poc./dzień</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-border">
+              <tr>
+                <td class="py-3 text-ink font-medium">Kraków &rarr; Warszawa</td>
+                <td class="py-3 text-right font-ticket text-[0.75rem] text-delay-danger font-semibold">14,2 min</td>
+                <td class="py-3 text-right font-ticket text-[0.75rem] text-delay-danger font-semibold">61%</td>
+                <td class="py-3 text-right font-ticket text-[0.75rem] text-ink-muted">38</td>
+              </tr>
+              <tr>
+                <td class="py-3 text-ink font-medium">Wrocław &rarr; Gdańsk</td>
+                <td class="py-3 text-right font-ticket text-[0.75rem] text-delay-danger font-semibold">12,8 min</td>
+                <td class="py-3 text-right font-ticket text-[0.75rem] text-delay-danger font-semibold">63%</td>
+                <td class="py-3 text-right font-ticket text-[0.75rem] text-ink-muted">12</td>
+              </tr>
+              <tr>
+                <td class="py-3 text-ink font-medium">Warszawa &rarr; Katowice</td>
+                <td class="py-3 text-right font-ticket text-[0.75rem] text-delay-warn font-semibold">11,4 min</td>
+                <td class="py-3 text-right font-ticket text-[0.75rem] text-delay-warn font-semibold">66%</td>
+                <td class="py-3 text-right font-ticket text-[0.75rem] text-ink-muted">28</td>
+              </tr>
+              <tr>
+                <td class="py-3 text-ink font-medium">Szczecin &rarr; Warszawa</td>
+                <td class="py-3 text-right font-ticket text-[0.75rem] text-delay-warn font-semibold">10,7 min</td>
+                <td class="py-3 text-right font-ticket text-[0.75rem] text-delay-warn font-semibold">67%</td>
+                <td class="py-3 text-right font-ticket text-[0.75rem] text-ink-muted">8</td>
+              </tr>
+              <tr>
+                <td class="py-3 text-ink font-medium">Lublin &rarr; Rzeszów</td>
+                <td class="py-3 text-right font-ticket text-[0.75rem] text-delay-warn font-semibold">10,1 min</td>
+                <td class="py-3 text-right font-ticket text-[0.75rem] text-delay-warn font-semibold">69%</td>
+                <td class="py-3 text-right font-ticket text-[0.75rem] text-ink-muted">6</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Best routes -->
+      <div class="bg-surface-raised rounded-2xl border border-border p-5 md:p-7">
+        <p class="section-label mb-1.5">// najlepsze trasy</p>
+        <h2 class="text-lg font-bold text-ink tracking-tight mb-5">Najbardziej punktualne trasy</h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-[0.8125rem]">
+            <thead>
+              <tr class="border-b border-border">
+                <th class="text-left py-2.5 font-ticket text-[0.625rem] text-ink-faint tracking-wider uppercase font-medium">Trasa</th>
+                <th class="text-right py-2.5 font-ticket text-[0.625rem] text-ink-faint tracking-wider uppercase font-medium">Śr. opóźn.</th>
+                <th class="text-right py-2.5 font-ticket text-[0.625rem] text-ink-faint tracking-wider uppercase font-medium">Punkt.</th>
+                <th class="text-right py-2.5 font-ticket text-[0.625rem] text-ink-faint tracking-wider uppercase font-medium">Poc./dzień</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-border">
+              <tr>
+                <td class="py-3 text-ink font-medium">Gdynia &rarr; Gdańsk (SKM)</td>
+                <td class="py-3 text-right font-ticket text-[0.75rem] text-delay-safe font-semibold">1,2 min</td>
+                <td class="py-3 text-right font-ticket text-[0.75rem] text-delay-safe font-semibold">94%</td>
+                <td class="py-3 text-right font-ticket text-[0.75rem] text-ink-muted">142</td>
+              </tr>
+              <tr>
+                <td class="py-3 text-ink font-medium">Warszawa &rarr; Łódź (EIP)</td>
+                <td class="py-3 text-right font-ticket text-[0.75rem] text-delay-safe font-semibold">2,1 min</td>
+                <td class="py-3 text-right font-ticket text-[0.75rem] text-delay-safe font-semibold">89%</td>
+                <td class="py-3 text-right font-ticket text-[0.75rem] text-ink-muted">18</td>
+              </tr>
+              <tr>
+                <td class="py-3 text-ink font-medium">Kraków &rarr; Wieliczka</td>
+                <td class="py-3 text-right font-ticket text-[0.75rem] text-delay-safe font-semibold">2,4 min</td>
+                <td class="py-3 text-right font-ticket text-[0.75rem] text-delay-safe font-semibold">88%</td>
+                <td class="py-3 text-right font-ticket text-[0.75rem] text-ink-muted">36</td>
+              </tr>
+              <tr>
+                <td class="py-3 text-ink font-medium">Warszawa &rarr; Grodzisk Maz.</td>
+                <td class="py-3 text-right font-ticket text-[0.75rem] text-delay-safe font-semibold">2,8 min</td>
+                <td class="py-3 text-right font-ticket text-[0.75rem] text-delay-safe font-semibold">86%</td>
+                <td class="py-3 text-right font-ticket text-[0.75rem] text-ink-muted">64</td>
+              </tr>
+              <tr>
+                <td class="py-3 text-ink font-medium">Poznań &rarr; Wrocław (EIP)</td>
+                <td class="py-3 text-right font-ticket text-[0.75rem] text-delay-safe font-semibold">3,1 min</td>
+                <td class="py-3 text-right font-ticket text-[0.75rem] text-delay-safe font-semibold">84%</td>
+                <td class="py-3 text-right font-ticket text-[0.75rem] text-ink-muted">14</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="max-w-5xl mx-auto px-5 py-16 text-center fade-up">
+    <h2 class="text-[1.5rem] md:text-[1.75rem] font-extrabold text-ink mb-4 tracking-tight">
+      Sprawdź opóźnienia na żywo
+    </h2>
+    <p class="text-ink-muted mb-6 max-w-md mx-auto">
+      Zobacz aktualne opóźnienia wszystkich pociągów w Polsce.
+    </p>
+    <div class="flex flex-col sm:flex-row gap-3 justify-center">
+      <a href="/opoznienia/dzisiaj" class="btn-primary">Opóźnienia dzisiaj</a>
+      <a href="/" class="btn-secondary">Sprawdź przesiadkę</a>
+    </div>
+  </section>
+
+  <!-- SEO content -->
+  <section class="border-t border-border bg-surface-raised">
+    <div class="max-w-3xl mx-auto px-5 py-16">
+      <h2 class="text-xl font-bold text-ink mb-4 tracking-tight">Punktualność PKP &mdash; jak jest naprawdę?</h2>
+      <div class="text-[0.9375rem] text-ink-muted leading-relaxed space-y-4">
+        <p>
+          Punktualność pociągów w Polsce to temat, który dotyczy milionów pasażerów. Według danych PKP PLK, średnia punktualność w sieci kolejowej wynosi ok. 73-78% w zależności od miesiąca. Najlepsze wyniki osiągają pociągi podmiejskie (SKM, Koleje Mazowieckie), natomiast dalekobieżne składy IC i TLK mają najniższą punktualność.
+        </p>
+        <p>
+          Sezonowość ma duży wpływ na opóźnienia &mdash; zimowe miesiące (styczeń-luty) przynoszą największe spadki punktualności z powodu warunków pogodowych i awarii infrastruktury. Letnie miesiące to z kolei czas remontów torów, co również powoduje opóźnienia na kluczowych trasach.
+        </p>
+        <p>
+          Najgorzej jest na trasach dalekobieżnych przechodzących przez największe węzły kolejowe: Warszawa Centralna, Kraków Główny, Wrocław Główny. Największe opóźnienia generują pociągi TLK (Twoje Linie Kolejowe) ze średnią punktualnością ok. 68%.
+        </p>
+        <p>
+          Jeśli Twój pociąg jest opóźniony ponad 60 minut, masz prawo do <a href="/odszkodowanie-za-opoznienie" class="text-brand-500 hover:text-brand-600 underline underline-offset-2">odszkodowania za opóźnienie</a>. Możesz też złożyć <a href="/reklamacja-pkp" class="text-brand-500 hover:text-brand-600 underline underline-offset-2">reklamację do PKP</a>.
+        </p>
+      </div>
+    </div>
+  </section>
+
+</Base>
+
+<!-- Overall punctuality gauge -->
+<script>
+  import ApexCharts from 'apexcharts';
+
+  const punctuality = 73.2;
+  const gaugeColor = punctuality >= 80 ? '#16a34a' : punctuality >= 60 ? '#d97706' : '#dc2626';
+
+  const gaugeOptions: ApexCharts.ApexOptions = {
+    chart: {
+      type: 'radialBar',
+      height: 240,
+      fontFamily: 'Outfit, system-ui, sans-serif',
+      background: 'transparent',
+      animations: { enabled: true, easing: 'easeinout', speed: 600 },
+    },
+    series: [punctuality],
+    colors: [gaugeColor],
+    plotOptions: {
+      radialBar: {
+        startAngle: -135,
+        endAngle: 135,
+        hollow: { size: '65%', background: 'transparent' },
+        track: { background: '#e7e5e0', strokeWidth: '100%', margin: 0 },
+        dataLabels: {
+          name: {
+            show: true,
+            fontSize: '11px',
+            fontFamily: 'JetBrains Mono, monospace',
+            color: '#a8a29e',
+            offsetY: 20,
+          },
+          value: {
+            show: true,
+            fontSize: '28px',
+            fontFamily: 'Outfit, system-ui, sans-serif',
+            fontWeight: '800',
+            color: '#1c1917',
+            offsetY: -16,
+            formatter: (val: number) => val.toFixed(1) + '%',
+          },
+        },
+      },
+    },
+    labels: ['PUNKTUALNOŚĆ'],
+    stroke: { lineCap: 'round' },
+    states: {
+      hover: { filter: { type: 'none' } },
+      active: { filter: { type: 'none' } },
+    },
+  };
+
+  const gaugeChart = new ApexCharts(document.querySelector('#overall-gauge'), gaugeOptions);
+  gaugeChart.render();
+</script>
+
+<!-- Monthly punctuality line chart -->
+<script>
+  import ApexCharts from 'apexcharts';
+
+  const months = ['Kwi 25', 'Maj 25', 'Cze 25', 'Lip 25', 'Sie 25', 'Wrz 25', 'Paź 25', 'Lis 25', 'Gru 25', 'Sty 26', 'Lut 26', 'Mar 26'];
+  const punctualityData = [78.4, 80.1, 82.3, 83.7, 81.2, 79.5, 76.8, 74.1, 71.3, 68.2, 70.5, 73.2];
+
+  const lineOptions: ApexCharts.ApexOptions = {
+    chart: {
+      type: 'line',
+      height: 300,
+      fontFamily: 'Outfit, system-ui, sans-serif',
+      background: 'transparent',
+      toolbar: { show: false },
+      zoom: { enabled: false },
+      animations: { enabled: true, easing: 'easeinout', speed: 600, animateGradually: { enabled: true, delay: 80 } },
+    },
+    series: [{ name: 'Punktualność', data: punctualityData }],
+    colors: ['#c2410c'],
+    fill: {
+      type: 'gradient',
+      gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.05, stops: [0, 90, 100] },
+    },
+    stroke: { curve: 'smooth', width: 2.5, lineCap: 'round' },
+    grid: {
+      borderColor: '#e7e5e0',
+      strokeDashArray: 4,
+      padding: { left: 8, right: 8 },
+      xaxis: { lines: { show: false } },
+      yaxis: { lines: { show: true } },
+    },
+    xaxis: {
+      categories: months,
+      labels: { style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', colors: '#a8a29e' } },
+      axisBorder: { show: true, color: '#e7e5e0' },
+      axisTicks: { show: false },
+      crosshairs: { stroke: { color: '#c2410c', width: 1, dashArray: 4 } },
+    },
+    yaxis: {
+      min: 60,
+      max: 90,
+      labels: {
+        style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', colors: '#a8a29e' },
+        formatter: (val: number) => val.toFixed(0) + '%',
+      },
+    },
+    tooltip: {
+      theme: 'light',
+      style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '11px' },
+      y: { formatter: (val: number) => val.toFixed(1) + '%' },
+      marker: { show: true },
+    },
+    dataLabels: { enabled: false },
+    markers: {
+      size: 4,
+      colors: ['#c2410c'],
+      strokeColors: '#fff',
+      strokeWidth: 2,
+      hover: { size: 6 },
+    },
+    annotations: {
+      yaxis: [
+        {
+          y: 80,
+          borderColor: '#16a34a',
+          strokeDashArray: 4,
+          label: {
+            text: 'Cel: 80%',
+            position: 'left',
+            style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: '#16a34a', background: 'transparent', borderColor: 'transparent' },
+          },
+        },
+      ],
+      xaxis: [
+        {
+          x: 'Sty 26',
+          borderColor: '#dc2626',
+          strokeDashArray: 4,
+          label: {
+            text: 'Zima',
+            style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: '#dc2626', background: 'transparent', borderColor: 'transparent' },
+          },
+        },
+      ],
+    },
+  };
+
+  const lineChart = new ApexCharts(document.querySelector('#monthly-line-chart'), lineOptions);
+  lineChart.render();
+</script>
+
+<!-- Operator bar chart -->
+<script>
+  import ApexCharts from 'apexcharts';
+
+  const operators = ['SKM Trójmiasto', 'PolRegio', 'Koleje Mazowieckie', 'PKP Intercity'];
+  const operatorPunctuality = [85, 81, 78, 73];
+
+  const operatorColors = operatorPunctuality.map(val =>
+    val >= 80 ? '#16a34a' : val >= 70 ? '#d97706' : '#dc2626'
+  );
+
+  const operatorOptions: ApexCharts.ApexOptions = {
+    chart: {
+      type: 'bar',
+      height: 280,
+      fontFamily: 'Outfit, system-ui, sans-serif',
+      background: 'transparent',
+      toolbar: { show: false },
+      animations: { enabled: true, easing: 'easeinout', speed: 600, animateGradually: { enabled: true, delay: 80 } },
+    },
+    plotOptions: {
+      bar: { horizontal: false, borderRadius: 6, columnWidth: '60%', distributed: true },
+    },
+    series: [{ name: 'Punktualność', data: operatorPunctuality }],
+    colors: operatorColors,
+    fill: { type: 'solid', opacity: 0.9 },
+    stroke: { width: 0 },
+    xaxis: {
+      categories: operators,
+      labels: { style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', colors: '#a8a29e' } },
+      axisBorder: { show: true, color: '#e7e5e0' },
+      axisTicks: { show: false },
+    },
+    yaxis: {
+      min: 50,
+      max: 100,
+      labels: {
+        style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', colors: '#a8a29e' },
+        formatter: (val: number) => val + '%',
+      },
+    },
+    grid: {
+      borderColor: '#e7e5e0',
+      strokeDashArray: 4,
+      padding: { left: 8, right: 8 },
+      xaxis: { lines: { show: false } },
+      yaxis: { lines: { show: true } },
+    },
+    tooltip: {
+      theme: 'light',
+      style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '11px' },
+      y: { formatter: (val: number) => val + '%' },
+    },
+    dataLabels: {
+      enabled: true,
+      formatter: (val: number) => val + '%',
+      style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', colors: ['#fff'] },
+      offsetY: -2,
+    },
+    legend: { show: false },
+    states: {
+      hover: { filter: { type: 'darken', value: 0.05 } },
+      active: { filter: { type: 'darken', value: 0.1 } },
+    },
+  };
+
+  const operatorChart = new ApexCharts(document.querySelector('#operator-bar-chart'), operatorOptions);
+  operatorChart.render();
+</script>
+
+<!-- Category bar chart -->
+<script>
+  import ApexCharts from 'apexcharts';
+
+  const categories = ['EIP', 'EIC', 'IC', 'TLK'];
+  const categoryPunctuality = [82, 76, 71, 68];
+
+  const categoryColors = categoryPunctuality.map(val =>
+    val >= 80 ? '#16a34a' : val >= 70 ? '#d97706' : '#dc2626'
+  );
+
+  const categoryOptions: ApexCharts.ApexOptions = {
+    chart: {
+      type: 'bar',
+      height: 280,
+      fontFamily: 'Outfit, system-ui, sans-serif',
+      background: 'transparent',
+      toolbar: { show: false },
+      animations: { enabled: true, easing: 'easeinout', speed: 600, animateGradually: { enabled: true, delay: 80 } },
+    },
+    plotOptions: {
+      bar: { horizontal: false, borderRadius: 6, columnWidth: '55%', distributed: true },
+    },
+    series: [{ name: 'Punktualność', data: categoryPunctuality }],
+    colors: categoryColors,
+    fill: { type: 'solid', opacity: 0.9 },
+    stroke: { width: 0 },
+    xaxis: {
+      categories: categories,
+      labels: { style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', colors: '#a8a29e' } },
+      axisBorder: { show: true, color: '#e7e5e0' },
+      axisTicks: { show: false },
+    },
+    yaxis: {
+      min: 50,
+      max: 100,
+      labels: {
+        style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', colors: '#a8a29e' },
+        formatter: (val: number) => val + '%',
+      },
+    },
+    grid: {
+      borderColor: '#e7e5e0',
+      strokeDashArray: 4,
+      padding: { left: 8, right: 8 },
+      xaxis: { lines: { show: false } },
+      yaxis: { lines: { show: true } },
+    },
+    tooltip: {
+      theme: 'light',
+      style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '11px' },
+      y: { formatter: (val: number) => val + '%' },
+    },
+    dataLabels: {
+      enabled: true,
+      formatter: (val: number) => val + '%',
+      style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', colors: ['#fff'] },
+      offsetY: -2,
+    },
+    legend: { show: false },
+    states: {
+      hover: { filter: { type: 'darken', value: 0.05 } },
+      active: { filter: { type: 'darken', value: 0.1 } },
+    },
+  };
+
+  const categoryChart = new ApexCharts(document.querySelector('#category-bar-chart'), categoryOptions);
+  categoryChart.render();
+</script>
