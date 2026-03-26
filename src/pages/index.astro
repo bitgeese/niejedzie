@@ -204,6 +204,92 @@ import Base from '../layouts/Base.astro';
     </div>
   </section>
 
+  <!-- Pricing -->
+  <section class="max-w-5xl mx-auto px-5 py-24">
+    <p class="section-label text-center mb-4">// cennik</p>
+    <h2 class="text-[1.75rem] md:text-[2rem] font-extrabold text-ink text-center mb-3 tracking-tight">Wybierz co Ci pasuje</h2>
+    <p class="text-ink-muted text-center mb-14 max-w-md mx-auto">Jednorazowy monitoring albo pełen spokój przez cały miesiąc.</p>
+
+    <div class="grid md:grid-cols-2 gap-5 max-w-2xl mx-auto">
+      <!-- One-time -->
+      <div class="bg-surface-raised rounded-2xl border border-border p-6 flex flex-col">
+        <div class="mb-5">
+          <p class="section-label text-ink-faint mb-3">Jednorazowy</p>
+          <div class="flex items-baseline gap-1">
+            <span class="font-ticket text-[2rem] font-bold text-ink tracking-tight">5 zł</span>
+            <span class="text-ink-faint text-sm">/ przesiadka</span>
+          </div>
+        </div>
+        <ul class="space-y-3 text-[0.875rem] text-ink-secondary mb-8 flex-1">
+          <li class="flex items-start gap-2.5">
+            <span class="text-delay-safe mt-0.5">&#10003;</span>
+            Monitoring jednej przesiadki w czasie rzeczywistym
+          </li>
+          <li class="flex items-start gap-2.5">
+            <span class="text-delay-safe mt-0.5">&#10003;</span>
+            Powiadomienie push jeśli opóźnienie zagraża połączeniu
+          </li>
+          <li class="flex items-start gap-2.5">
+            <span class="text-delay-safe mt-0.5">&#10003;</span>
+            Propozycje alternatywnych połączeń
+          </li>
+          <li class="flex items-start gap-2.5">
+            <span class="text-delay-safe mt-0.5">&#10003;</span>
+            Sprawdzenie prawa do odszkodowania
+          </li>
+        </ul>
+        <a href="/cennik" class="btn-secondary w-full text-center">Kup jednorazowo</a>
+      </div>
+
+      <!-- Subscription -->
+      <div class="bg-surface-raised rounded-2xl border-2 border-brand-500 p-6 flex flex-col relative">
+        <div class="absolute -top-3 left-6">
+          <span class="font-ticket text-[0.625rem] font-semibold tracking-wider uppercase bg-brand-500 text-white px-3 py-1 rounded-md">Najlepsza wartość</span>
+        </div>
+        <div class="mb-5">
+          <p class="section-label text-ink-faint mb-3">Miesięczny</p>
+          <div class="flex items-baseline gap-1">
+            <span class="font-ticket text-[2rem] font-bold text-ink tracking-tight">15 zł</span>
+            <span class="text-ink-faint text-sm">/ miesiąc</span>
+          </div>
+        </div>
+        <ul class="space-y-3 text-[0.875rem] text-ink-secondary mb-8 flex-1">
+          <li class="flex items-start gap-2.5">
+            <span class="text-delay-safe mt-0.5">&#10003;</span>
+            <strong>Nielimitowany</strong> monitoring wszystkich przesiadek
+          </li>
+          <li class="flex items-start gap-2.5">
+            <span class="text-delay-safe mt-0.5">&#10003;</span>
+            Automatyczne śledzenie po podaniu numeru pociągu
+          </li>
+          <li class="flex items-start gap-2.5">
+            <span class="text-delay-safe mt-0.5">&#10003;</span>
+            Powiadomienia push dla wszystkich Twoich podróży
+          </li>
+          <li class="flex items-start gap-2.5">
+            <span class="text-delay-safe mt-0.5">&#10003;</span>
+            Alternatywne połączenia + odszkodowania
+          </li>
+          <li class="flex items-start gap-2.5">
+            <span class="text-delay-safe mt-0.5">&#10003;</span>
+            Historia opóźnień Twoich tras
+          </li>
+          <li class="flex items-start gap-2.5">
+            <span class="text-delay-safe mt-0.5">&#10003;</span>
+            Priorytetowe powiadomienia
+          </li>
+        </ul>
+        <a href="/cennik" class="btn-primary w-full text-center">Zacznij za 15 zł/msc</a>
+        <p class="text-center text-[0.6875rem] text-ink-faint mt-3">Anulujesz kiedy chcesz. Bez zobowiązań.</p>
+      </div>
+    </div>
+
+    <p class="text-center text-[0.8125rem] text-ink-faint mt-8">
+      Sprawdzanie opóźnień i statystyk jest <strong class="text-ink">zawsze darmowe</strong>.
+      Płacisz tylko za monitoring przesiadek z powiadomieniami.
+    </p>
+  </section>
+
   <!-- Delay check -->
   <section class="border-t border-border bg-surface-raised">
     <div class="max-w-5xl mx-auto px-5 py-16">
@@ -224,11 +310,16 @@ import Base from '../layouts/Base.astro';
       Nie daj się zaskoczyć<br/>opóźnieniem
     </h2>
     <p class="text-ink-muted mb-8 max-w-md mx-auto text-[1.0625rem] leading-relaxed">
-      Za <span class="font-ticket font-semibold text-brand-500">5&nbsp;zł</span> monitorujemy Twoją przesiadkę i&nbsp;damy Ci znać jeśli coś pójdzie nie tak.
+      Monitorujemy Twoją przesiadkę i&nbsp;damy Ci znać jeśli coś pójdzie nie tak.
     </p>
-    <a href="#top" class="btn-primary">
-      Sprawdź swoją przesiadkę
-    </a>
+    <div class="flex flex-col sm:flex-row gap-3 justify-center">
+      <a href="#top" class="btn-primary">
+        Sprawdź swoją przesiadkę
+      </a>
+      <a href="/cennik" class="btn-secondary">
+        Zobacz cennik
+      </a>
+    </div>
   </section>
 
 </Base>
