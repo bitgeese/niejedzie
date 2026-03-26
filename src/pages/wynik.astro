@@ -139,29 +139,67 @@ const bufferColor = transfer.currentBuffer > 20 ? 'green' : transfer.currentBuff
           </div>
         </div>
 
-        <!-- PRIMARY CTA -->
+        <!-- PRIMARY CTA — Monthly subscription (recommended) -->
         <div class="p-5 bg-orange-50 border-t-2 border-orange-400">
-          <h2 class="text-base font-bold text-stone-800 mb-2 text-center">Monitoruj tę przesiadkę</h2>
-          <button class="w-full py-3.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl transition-colors text-base shadow-md shadow-orange-500/20">
-            Włącz monitoring — 5 zł
-          </button>
-          <ul class="mt-4 space-y-2">
-            <li class="flex items-start gap-2 text-sm text-stone-600">
-              <span class="text-orange-500 font-bold leading-tight">&#10003;</span>
-              Push powiadomienie gdy opóźnienie się zmieni
-            </li>
-            <li class="flex items-start gap-2 text-sm text-stone-600">
-              <span class="text-orange-500 font-bold leading-tight">&#10003;</span>
-              Propozycje alternatywnych połączeń
-            </li>
-            <li class="flex items-start gap-2 text-sm text-stone-600">
-              <span class="text-orange-500 font-bold leading-tight">&#10003;</span>
-              Sprawdzenie prawa do odszkodowania (60+ min)
-            </li>
-          </ul>
-          <p class="text-center text-xs text-stone-400 mt-3">
-            Jednorazowa płatność &middot; Bez subskrypcji &middot; Monitorujemy do końca podróży
-          </p>
+          <h2 class="text-base font-bold text-stone-800 mb-4 text-center">Monitoruj tę przesiadkę</h2>
+
+          <!-- Monthly — highlighted as best deal -->
+          <div class="bg-white rounded-xl border-2 border-orange-400 p-4 mb-3 relative">
+            <div class="absolute -top-2.5 left-4">
+              <span class="font-ticket text-[0.5625rem] font-semibold tracking-wider uppercase bg-orange-500 text-white px-2.5 py-0.5 rounded">Polecany</span>
+            </div>
+            <div class="flex items-center justify-between mb-2.5">
+              <div>
+                <p class="text-sm font-bold text-stone-800">Plan miesięczny</p>
+                <p class="text-xs text-stone-500">Nielimitowane przesiadki + dodatkowe funkcje</p>
+              </div>
+              <div class="text-right">
+                <span class="font-ticket text-lg font-bold text-stone-800">15 zł</span>
+                <span class="text-xs text-stone-400">/msc</span>
+              </div>
+            </div>
+            <button class="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl transition-colors text-sm shadow-md shadow-orange-500/20">
+              Włącz plan miesięczny
+            </button>
+            <div class="flex flex-wrap gap-x-4 gap-y-1 mt-2.5">
+              <span class="flex items-center gap-1 text-xs text-stone-500">
+                <span class="text-orange-500 font-bold">&#10003;</span> Bez limitu przesiadek
+              </span>
+              <span class="flex items-center gap-1 text-xs text-stone-500">
+                <span class="text-orange-500 font-bold">&#10003;</span> Priorytetowe alerty
+              </span>
+              <span class="flex items-center gap-1 text-xs text-stone-500">
+                <span class="text-orange-500 font-bold">&#10003;</span> Historia tras
+              </span>
+              <span class="flex items-center gap-1 text-xs text-stone-500">
+                <span class="text-orange-500 font-bold">&#10003;</span> Pomoc z reklamacją
+              </span>
+            </div>
+            <p class="text-[0.6875rem] text-stone-400 mt-2">Anulujesz kiedy chcesz. Bez zobowiązań.</p>
+          </div>
+
+          <!-- One-time — secondary option -->
+          <div class="bg-stone-50 rounded-xl border border-stone-200 p-4">
+            <div class="flex items-center justify-between mb-2.5">
+              <div>
+                <p class="text-sm font-medium text-stone-700">Tylko ta przesiadka</p>
+                <p class="text-xs text-stone-400">Jednorazowy monitoring</p>
+              </div>
+              <div class="text-right">
+                <span class="font-ticket text-lg font-bold text-stone-700">5 zł</span>
+              </div>
+            </div>
+            <button class="w-full py-2.5 bg-white hover:bg-stone-100 text-stone-700 font-semibold rounded-xl transition-colors text-sm border border-stone-300">
+              Kup jednorazowo — 5 zł
+            </button>
+          </div>
+
+          <!-- Nudge toward monthly -->
+          <div class="mt-3 text-center">
+            <p class="text-xs text-stone-500">
+              Podróżujesz regularnie? <a href="/premium" class="text-orange-600 font-semibold hover:underline">Plan miesięczny</a> = nielimitowane przesiadki za cenę trzech jednorazowych.
+            </p>
+          </div>
         </div>
       </div>
     </div>
@@ -238,15 +276,21 @@ const bufferColor = transfer.currentBuffer > 20 ? 'green' : transfer.currentBuff
     </div>
   </section>
 
-  <!-- Bottom CTA -->
+  <!-- Bottom CTA — push monthly -->
   <section class="max-w-4xl mx-auto px-4 py-14 text-center">
     <h2 class="text-xl font-bold text-stone-900 mb-2">Nie chcesz o tym myśleć?</h2>
     <p class="text-stone-500 text-sm mb-5 max-w-md mx-auto">
-      Włącz monitoring i zajmij się czymś przyjemniejszym. Damy Ci znać jeśli trzeba będzie reagować.
+      Z planem miesięcznym monitorujemy <strong>każdą</strong> Twoją przesiadkę. Bez limitu, bez stresu.
     </p>
-    <button class="px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl transition-colors text-sm shadow-md shadow-orange-500/20">
-      Monitoruj przesiadkę — 5 zł
-    </button>
+    <div class="flex flex-col sm:flex-row gap-3 justify-center">
+      <a href="/premium" class="px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl transition-colors text-sm shadow-md shadow-orange-500/20">
+        Plan miesięczny — 15 zł/msc
+      </a>
+      <button class="px-6 py-3 bg-white hover:bg-stone-100 text-stone-600 font-medium rounded-xl transition-colors text-sm border border-stone-300">
+        Tylko ta przesiadka — 5 zł
+      </button>
+    </div>
+    <p class="text-xs text-stone-400 mt-3">3 przesiadki w miesiącu? Plan miesięczny już się opłaca.</p>
   </section>
 
 </Base>

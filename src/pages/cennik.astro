@@ -1,22 +1,31 @@
 ---
 import Base from '../layouts/Base.astro';
 ---
-<Base title="Cennik — monitoring przesiadek" description="Jednorazowy monitoring przesiadki za 5 zł lub nielimitowany dostęp za 15 zł miesięcznie. Sprawdzanie opóźnień zawsze za darmo.">
+<Base title="Cennik — monitoring przesiadek" description="Nielimitowany monitoring przesiadek za 15 zł/msc lub jednorazowo 5 zł. Sprawdzanie opóźnień zawsze za darmo.">
 
   <section class="max-w-5xl mx-auto px-5 pt-16 pb-8">
     <p class="section-label text-center mb-4">// cennik</p>
     <h1 class="text-[2rem] md:text-[2.5rem] font-extrabold text-ink text-center mb-4 tracking-tight">
       Prosty cennik, zero haczyków
     </h1>
-    <p class="text-ink-muted text-center mb-16 max-w-lg mx-auto text-[1.0625rem] leading-relaxed">
+    <p class="text-ink-muted text-center mb-6 max-w-lg mx-auto text-[1.0625rem] leading-relaxed">
       Sprawdzanie opóźnień i&nbsp;statystyk jest zawsze darmowe. Płacisz tylko za monitoring przesiadek z&nbsp;powiadomieniami push.
     </p>
 
-    <!-- Plans -->
-    <div class="grid md:grid-cols-3 gap-5 max-w-4xl mx-auto mb-20">
+    <!-- Breakeven callout -->
+    <div class="max-w-md mx-auto mb-14">
+      <div class="bg-brand-50 border border-brand-200 rounded-xl px-5 py-3.5 text-center">
+        <p class="text-[0.875rem] text-ink-secondary">
+          <span class="font-ticket font-semibold text-brand-500">3 przesiadki</span> w miesiącu? Plan miesięczny już się opłaca.
+        </p>
+      </div>
+    </div>
 
-      <!-- Free -->
-      <div class="bg-surface-raised rounded-2xl border border-border p-6 flex flex-col">
+    <!-- Plans — monthly first (anchoring), then one-time, free last -->
+    <div class="grid md:grid-cols-3 gap-5 max-w-4xl mx-auto mb-16">
+
+      <!-- Free — stepping stone -->
+      <div class="bg-surface-raised rounded-2xl border border-border p-6 flex flex-col order-3 md:order-1">
         <div class="mb-6">
           <p class="section-label text-ink-faint mb-3">Darmowy</p>
           <div class="flex items-baseline gap-1">
@@ -45,20 +54,60 @@ import Base from '../layouts/Base.astro';
         <a href="/" class="btn-secondary w-full text-center">Korzystaj za darmo</a>
       </div>
 
-      <!-- One-time -->
-      <div class="bg-surface-raised rounded-2xl border border-border p-6 flex flex-col">
+      <!-- Monthly — HERO PLAN, visually dominant, center position -->
+      <div class="bg-surface-raised rounded-2xl border-2 border-brand-500 p-6 flex flex-col relative shadow-lg shadow-brand-500/10 md:scale-105 order-1 md:order-2">
+        <div class="absolute -top-3 left-6">
+          <span class="font-ticket text-[0.625rem] font-semibold tracking-wider uppercase bg-brand-500 text-white px-3 py-1 rounded-md">Polecany</span>
+        </div>
+        <div class="mb-6">
+          <p class="section-label text-brand-500 mb-3">Miesięczny</p>
+          <div class="flex items-baseline gap-1">
+            <span class="font-ticket text-[2.5rem] font-bold text-ink tracking-tight">15 zł</span>
+            <span class="text-ink-faint text-sm">/ miesiąc</span>
+          </div>
+          <p class="text-[0.8125rem] text-brand-600 font-medium mt-1.5">Tyle co 3 jednorazowe &mdash; ale bez limitu</p>
+        </div>
+        <ul class="space-y-3 text-[0.875rem] text-ink-secondary mb-8 flex-1">
+          <li class="flex items-start gap-2.5">
+            <span class="text-brand-500 mt-0.5 font-bold">&#10003;</span>
+            <strong>Nielimitowany</strong> monitoring wszystkich przesiadek
+          </li>
+          <li class="flex items-start gap-2.5">
+            <span class="text-brand-500 mt-0.5 font-bold">&#10003;</span>
+            Automatyczne śledzenie po wpisaniu pociągu
+          </li>
+          <li class="flex items-start gap-2.5">
+            <span class="text-brand-500 mt-0.5 font-bold">&#10003;</span>
+            <strong>Priorytetowe</strong> powiadomienia push
+          </li>
+          <li class="flex items-start gap-2.5">
+            <span class="text-brand-500 mt-0.5 font-bold">&#10003;</span>
+            Historia opóźnień Twoich tras
+          </li>
+          <li class="flex items-start gap-2.5">
+            <span class="text-brand-500 mt-0.5 font-bold">&#10003;</span>
+            Alternatywne połączenia + odszkodowania
+          </li>
+          <li class="flex items-start gap-2.5">
+            <span class="text-brand-500 mt-0.5 font-bold">&#10003;</span>
+            Pomoc w składaniu reklamacji
+          </li>
+        </ul>
+        <button class="btn-primary w-full text-center" disabled>Zacznij za 15 zł/msc</button>
+        <p class="text-center text-[0.6875rem] text-ink-faint mt-3">Anulujesz kiedy chcesz. Bez zobowiązań.</p>
+      </div>
+
+      <!-- One-time — decoy / stepping stone -->
+      <div class="bg-surface-raised rounded-2xl border border-border p-6 flex flex-col order-2 md:order-3">
         <div class="mb-6">
           <p class="section-label text-ink-faint mb-3">Jednorazowy</p>
           <div class="flex items-baseline gap-1">
             <span class="font-ticket text-[2rem] font-bold text-ink tracking-tight">5 zł</span>
             <span class="text-ink-faint text-sm">/ przesiadka</span>
           </div>
+          <p class="text-[0.75rem] text-ink-faint mt-1">Przy 3+ przesiadkach &mdash; droższy niż miesięczny</p>
         </div>
         <ul class="space-y-3 text-[0.875rem] text-ink-secondary mb-8 flex-1">
-          <li class="flex items-start gap-2.5">
-            <span class="text-delay-safe mt-0.5">&#10003;</span>
-            Wszystko z darmowego planu
-          </li>
           <li class="flex items-start gap-2.5">
             <span class="text-delay-safe mt-0.5">&#10003;</span>
             Monitoring jednej przesiadki na żywo
@@ -75,51 +124,153 @@ import Base from '../layouts/Base.astro';
             <span class="text-delay-safe mt-0.5">&#10003;</span>
             Automatyczne sprawdzenie odszkodowania
           </li>
+          <li class="flex items-start gap-2.5">
+            <span class="text-ink-faint mt-0.5">&#10007;</span>
+            <span class="text-ink-faint">Brak historii tras</span>
+          </li>
+          <li class="flex items-start gap-2.5">
+            <span class="text-ink-faint mt-0.5">&#10007;</span>
+            <span class="text-ink-faint">Brak priorytetowych powiadomień</span>
+          </li>
         </ul>
-        <button class="btn-secondary w-full text-center" disabled>Wkrótce dostępne</button>
+        <button class="btn-secondary w-full text-center" disabled>Kup jednorazowo &mdash; 5 zł</button>
+        <p class="text-center text-[0.6875rem] text-ink-faint mt-3">Pojedyncza płatność, bez subskrypcji.</p>
       </div>
+    </div>
 
-      <!-- Monthly -->
-      <div class="bg-surface-raised rounded-2xl border-2 border-brand-500 p-6 flex flex-col relative">
-        <div class="absolute -top-3 left-6">
-          <span class="font-ticket text-[0.625rem] font-semibold tracking-wider uppercase bg-brand-500 text-white px-3 py-1 rounded-md">Najlepsza wartość</span>
+    <!-- Savings calculator -->
+    <div class="max-w-2xl mx-auto mb-20">
+      <p class="section-label text-center mb-8">// ile oszczędzasz z planem miesięcznym</p>
+      <div class="bg-surface-raised rounded-2xl border border-border p-6 md:p-8">
+        <p class="text-[0.9375rem] text-ink-secondary text-center mb-6">
+          Ile przesiadek monitorujesz w miesiącu?
+        </p>
+        <div class="flex items-center justify-center gap-4 mb-8">
+          <button class="calc-btn" data-val="1" onclick="updateCalc(1)">1</button>
+          <button class="calc-btn" data-val="2" onclick="updateCalc(2)">2</button>
+          <button class="calc-btn calc-btn-active" data-val="3" onclick="updateCalc(3)">3</button>
+          <button class="calc-btn" data-val="4" onclick="updateCalc(4)">4</button>
+          <button class="calc-btn" data-val="5" onclick="updateCalc(5)">5</button>
+          <button class="calc-btn" data-val="8" onclick="updateCalc(8)">8</button>
+          <button class="calc-btn" data-val="10" onclick="updateCalc(10)">10+</button>
         </div>
-        <div class="mb-6">
-          <p class="section-label text-ink-faint mb-3">Miesięczny</p>
-          <div class="flex items-baseline gap-1">
-            <span class="font-ticket text-[2rem] font-bold text-ink tracking-tight">15 zł</span>
-            <span class="text-ink-faint text-sm">/ miesiąc</span>
+
+        <div class="grid grid-cols-2 gap-4 mb-6">
+          <div class="bg-surface-sunken rounded-xl p-4 text-center">
+            <p class="section-label text-ink-faint mb-2">Jednorazowo</p>
+            <p class="font-ticket text-[1.5rem] font-bold text-ink" id="calc-onetime">15 zł</p>
+            <p class="text-[0.75rem] text-ink-faint mt-1">5 zł &times; <span id="calc-count-label">3</span> przesiadki</p>
           </div>
-          <p class="text-[0.75rem] text-ink-faint mt-1">Już od 3 przesiadek w miesiącu się opłaca</p>
+          <div class="bg-brand-50 rounded-xl p-4 text-center border border-brand-200">
+            <p class="section-label text-brand-500 mb-2">Miesięczny</p>
+            <p class="font-ticket text-[1.5rem] font-bold text-brand-500">15 zł</p>
+            <p class="text-[0.75rem] text-brand-600 font-medium mt-1" id="calc-savings">Taka sama cena &mdash; ale bez limitu!</p>
+          </div>
         </div>
-        <ul class="space-y-3 text-[0.875rem] text-ink-secondary mb-8 flex-1">
-          <li class="flex items-start gap-2.5">
-            <span class="text-delay-safe mt-0.5">&#10003;</span>
-            Wszystko z jednorazowego planu
-          </li>
-          <li class="flex items-start gap-2.5">
-            <span class="text-delay-safe mt-0.5">&#10003;</span>
-            <strong>Nielimitowany</strong> monitoring przesiadek
-          </li>
-          <li class="flex items-start gap-2.5">
-            <span class="text-delay-safe mt-0.5">&#10003;</span>
-            Automatyczne śledzenie po wpisaniu pociągu
-          </li>
-          <li class="flex items-start gap-2.5">
-            <span class="text-delay-safe mt-0.5">&#10003;</span>
-            Historia opóźnień Twoich tras
-          </li>
-          <li class="flex items-start gap-2.5">
-            <span class="text-delay-safe mt-0.5">&#10003;</span>
-            Priorytetowe powiadomienia
-          </li>
-          <li class="flex items-start gap-2.5">
-            <span class="text-delay-safe mt-0.5">&#10003;</span>
-            Pomoc w składaniu reklamacji
-          </li>
-        </ul>
-        <button class="btn-primary w-full text-center" disabled>Wkrótce dostępne</button>
-        <p class="text-center text-[0.6875rem] text-ink-faint mt-3">Anulujesz kiedy chcesz. Bez zobowiązań.</p>
+
+        <div class="text-center" id="calc-verdict">
+          <p class="text-[0.875rem] text-ink-secondary">
+            Przy 3 przesiadkach płacisz tyle samo &mdash; ale z planem miesięcznym masz <strong>nielimitowany</strong> monitoring, historię tras i priorytetowe alerty.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      function updateCalc(n) {
+        const onetimePrice = n * 5;
+        const monthlyPrice = 15;
+        const saving = onetimePrice - monthlyPrice;
+
+        document.getElementById('calc-onetime').textContent = onetimePrice + ' zł';
+        document.getElementById('calc-count-label').textContent = n;
+
+        // Update active button
+        document.querySelectorAll('.calc-btn').forEach(btn => {
+          btn.classList.remove('calc-btn-active');
+          if (parseInt(btn.dataset.val) === n) btn.classList.add('calc-btn-active');
+        });
+
+        const savingsEl = document.getElementById('calc-savings');
+        const verdictEl = document.getElementById('calc-verdict');
+
+        if (n < 3) {
+          savingsEl.innerHTML = 'Stała cena niezależnie od liczby przesiadek';
+          verdictEl.innerHTML = '<p class="text-[0.875rem] text-ink-secondary">Przy ' + n + ' przesiad' + (n === 1 ? 'ce' : 'kach') + ' jednorazowy jest tańszy. Ale jeśli podróżujesz częściej &mdash; <a href="/premium" class="text-brand-500 font-semibold hover:underline">plan miesięczny</a> szybko się zwraca.</p>';
+        } else if (n === 3) {
+          savingsEl.innerHTML = 'Taka sama cena &mdash; ale bez limitu!';
+          verdictEl.innerHTML = '<p class="text-[0.875rem] text-ink-secondary">Przy 3 przesiadkach płacisz tyle samo &mdash; ale z planem miesięcznym masz <strong>nielimitowany</strong> monitoring, historię tras i priorytetowe alerty.</p>';
+        } else {
+          savingsEl.innerHTML = 'Oszczędzasz <strong>' + saving + '&nbsp;zł</strong> miesięcznie!';
+          verdictEl.innerHTML = '<p class="text-[0.9375rem] font-semibold text-brand-600">Plan miesięczny oszczędza Ci ' + saving + ' zł. Im więcej podróżujesz, tym więcej zyskujesz.</p>';
+        }
+      }
+    </script>
+
+    <!-- Comparison table -->
+    <div class="max-w-2xl mx-auto mb-20">
+      <p class="section-label text-center mb-8">// porównanie planów</p>
+      <div class="bg-surface-raised rounded-2xl border border-border overflow-hidden">
+        <table class="w-full text-[0.875rem]">
+          <thead>
+            <tr class="border-b border-border">
+              <th class="text-left px-5 py-3.5 text-ink-faint font-medium text-[0.8125rem]">Funkcja</th>
+              <th class="px-4 py-3.5 text-ink-faint font-medium text-[0.8125rem] text-center">Darmowy</th>
+              <th class="px-4 py-3.5 text-ink-faint font-medium text-[0.8125rem] text-center">5 zł</th>
+              <th class="px-4 py-3.5 font-medium text-[0.8125rem] text-center bg-brand-50 text-brand-600">15 zł/msc</th>
+            </tr>
+          </thead>
+          <tbody class="text-ink-secondary">
+            <tr class="border-b border-border/60">
+              <td class="px-5 py-3">Sprawdzanie opóźnień</td>
+              <td class="px-4 py-3 text-center text-delay-safe">&#10003;</td>
+              <td class="px-4 py-3 text-center text-delay-safe">&#10003;</td>
+              <td class="px-4 py-3 text-center text-delay-safe bg-brand-50/50">&#10003;</td>
+            </tr>
+            <tr class="border-b border-border/60">
+              <td class="px-5 py-3">Statystyki punktualności</td>
+              <td class="px-4 py-3 text-center text-delay-safe">&#10003;</td>
+              <td class="px-4 py-3 text-center text-delay-safe">&#10003;</td>
+              <td class="px-4 py-3 text-center text-delay-safe bg-brand-50/50">&#10003;</td>
+            </tr>
+            <tr class="border-b border-border/60">
+              <td class="px-5 py-3">Monitoring przesiadki</td>
+              <td class="px-4 py-3 text-center text-ink-faint">&#10007;</td>
+              <td class="px-4 py-3 text-center text-ink">1 na raz</td>
+              <td class="px-4 py-3 text-center font-semibold text-brand-600 bg-brand-50/50">Bez limitu</td>
+            </tr>
+            <tr class="border-b border-border/60">
+              <td class="px-5 py-3">Powiadomienia push</td>
+              <td class="px-4 py-3 text-center text-ink-faint">&#10007;</td>
+              <td class="px-4 py-3 text-center text-delay-safe">&#10003;</td>
+              <td class="px-4 py-3 text-center font-semibold text-brand-600 bg-brand-50/50">Priorytetowe</td>
+            </tr>
+            <tr class="border-b border-border/60">
+              <td class="px-5 py-3">Alternatywne połączenia</td>
+              <td class="px-4 py-3 text-center text-ink-faint">&#10007;</td>
+              <td class="px-4 py-3 text-center text-delay-safe">&#10003;</td>
+              <td class="px-4 py-3 text-center text-delay-safe bg-brand-50/50">&#10003;</td>
+            </tr>
+            <tr class="border-b border-border/60">
+              <td class="px-5 py-3">Sprawdzenie odszkodowania</td>
+              <td class="px-4 py-3 text-center text-ink-faint">&#10007;</td>
+              <td class="px-4 py-3 text-center text-delay-safe">&#10003;</td>
+              <td class="px-4 py-3 text-center text-delay-safe bg-brand-50/50">&#10003;</td>
+            </tr>
+            <tr class="border-b border-border/60">
+              <td class="px-5 py-3">Historia opóźnień Twoich tras</td>
+              <td class="px-4 py-3 text-center text-ink-faint">&#10007;</td>
+              <td class="px-4 py-3 text-center text-ink-faint">&#10007;</td>
+              <td class="px-4 py-3 text-center text-delay-safe bg-brand-50/50">&#10003;</td>
+            </tr>
+            <tr>
+              <td class="px-5 py-3">Pomoc w składaniu reklamacji</td>
+              <td class="px-4 py-3 text-center text-ink-faint">&#10007;</td>
+              <td class="px-4 py-3 text-center text-ink-faint">&#10007;</td>
+              <td class="px-4 py-3 text-center text-delay-safe bg-brand-50/50">&#10003;</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
 
@@ -130,21 +281,21 @@ import Base from '../layouts/Base.astro';
       <div class="space-y-4">
         <details class="group bg-surface-raised rounded-xl border border-border">
           <summary class="px-5 py-4 cursor-pointer text-[0.9375rem] font-semibold text-ink flex items-center justify-between">
-            Co dokładnie dostaję za 5 zł?
+            Kiedy opłaca się plan miesięczny?
             <span class="text-ink-faint group-open:rotate-45 transition-transform text-lg">+</span>
           </summary>
           <div class="px-5 pb-4 text-[0.875rem] text-ink-muted leading-relaxed">
-            Monitoring jednej konkretnej przesiadki w czasie rzeczywistym. Od momentu zakupu śledzimy Twój pociąg i&nbsp;jeśli opóźnienie zagrozi przesiadce — wyślemy Ci powiadomienie push z&nbsp;aktualnym czasem i&nbsp;propozycjami alternatywnych połączeń. Jeśli opóźnienie przekroczy 60 minut, automatycznie sprawdzimy czy przysługuje Ci odszkodowanie.
+            Jeśli podróżujesz pociągiem z przesiadką <strong>3 lub więcej razy</strong> w miesiącu. Przy 3 przesiadkach jednorazowo zapłacisz 15&nbsp;zł &mdash; dokładnie tyle co subskrypcja. Ale z planem miesięcznym dostajesz nielimitowany monitoring, historię tras, priorytetowe powiadomienia i pomoc w reklamacjach. Przy 5 przesiadkach oszczędzasz już 10 zł.
           </div>
         </details>
 
         <details class="group bg-surface-raised rounded-xl border border-border">
           <summary class="px-5 py-4 cursor-pointer text-[0.9375rem] font-semibold text-ink flex items-center justify-between">
-            Kiedy opłaca się plan miesięczny?
+            Co dokładnie dostaję za 5 zł?
             <span class="text-ink-faint group-open:rotate-45 transition-transform text-lg">+</span>
           </summary>
           <div class="px-5 pb-4 text-[0.875rem] text-ink-muted leading-relaxed">
-            Jeśli podróżujesz pociągiem z przesiadką 3 lub więcej razy w miesiącu. Przy 3 przesiadkach jednorazowo zapłacisz 15&nbsp;zł — tyle samo co subskrypcja, ale w planie miesięcznym masz nielimitowane przesiadki, historię tras i&nbsp;priorytetowe powiadomienia.
+            Monitoring jednej konkretnej przesiadki w czasie rzeczywistym. Od momentu zakupu śledzimy Twój pociąg i&nbsp;jeśli opóźnienie zagrozi przesiadce &mdash; wyślemy Ci powiadomienie push z&nbsp;aktualnym czasem i&nbsp;propozycjami alternatywnych połączeń. Jeśli opóźnienie przekroczy 60 minut, automatycznie sprawdzimy czy przysługuje Ci odszkodowanie.
           </div>
         </details>
 
@@ -154,7 +305,7 @@ import Base from '../layouts/Base.astro';
             <span class="text-ink-faint group-open:rotate-45 transition-transform text-lg">+</span>
           </summary>
           <div class="px-5 pb-4 text-[0.875rem] text-ink-muted leading-relaxed">
-            Po zakupie monitoringu poprosimy o&nbsp;zgodę na powiadomienia w&nbsp;przeglądarce (lub aplikacji PWA). Kiedy opóźnienie Twojego pociągu zmieni się w&nbsp;sposób zagrażający przesiadce, wyślemy powiadomienie push na Twój telefon — nawet jeśli nie masz otwartej strony.
+            Po zakupie monitoringu poprosimy o&nbsp;zgodę na powiadomienia w&nbsp;przeglądarce (lub aplikacji PWA). Kiedy opóźnienie Twojego pociągu zmieni się w&nbsp;sposób zagrażający przesiadce, wyślemy powiadomienie push na Twój telefon &mdash; nawet jeśli nie masz otwartej strony.
           </div>
         </details>
 
@@ -164,7 +315,7 @@ import Base from '../layouts/Base.astro';
             <span class="text-ink-faint group-open:rotate-45 transition-transform text-lg">+</span>
           </summary>
           <div class="px-5 pb-4 text-[0.875rem] text-ink-muted leading-relaxed">
-            Tak, w&nbsp;dowolnym momencie. Bez okresu wypowiedzenia, bez ukrytych opłat. Po anulowaniu masz dostęp do końca opłaconego okresu.
+            Tak, w&nbsp;dowolnym momencie. Bez okresu wypowiedzenia, bez ukrytych opłat. Po anulowaniu masz dostęp do końca opłaconego okresu. Jeden klik i gotowe.
           </div>
         </details>
 
@@ -174,7 +325,17 @@ import Base from '../layouts/Base.astro';
             <span class="text-ink-faint group-open:rotate-45 transition-transform text-lg">+</span>
           </summary>
           <div class="px-5 pb-4 text-[0.875rem] text-ink-muted leading-relaxed">
-            Karty płatnicze (Visa, Mastercard) oraz BLIK. Płatności obsługuje Stripe — Twoje dane karty nigdy nie trafiają na nasze serwery.
+            Karty płatnicze (Visa, Mastercard) oraz BLIK. Płatności obsługuje Stripe &mdash; Twoje dane karty nigdy nie trafiają na nasze serwery.
+          </div>
+        </details>
+
+        <details class="group bg-surface-raised rounded-xl border border-border">
+          <summary class="px-5 py-4 cursor-pointer text-[0.9375rem] font-semibold text-ink flex items-center justify-between">
+            Czym różni się plan miesięczny od jednorazowego?
+            <span class="text-ink-faint group-open:rotate-45 transition-transform text-lg">+</span>
+          </summary>
+          <div class="px-5 pb-4 text-[0.875rem] text-ink-muted leading-relaxed">
+            Jednorazowy monitoring to 5&nbsp;zł za jedną przesiadkę &mdash; po zakończeniu podróży wygasa. Plan miesięczny za 15&nbsp;zł daje Ci <strong>nielimitowany</strong> monitoring wszystkich przesiadek w danym miesiącu, plus dodatkowe funkcje: historię opóźnień Twoich tras, priorytetowe powiadomienia i pomoc w składaniu reklamacji do PKP.
           </div>
         </details>
       </div>

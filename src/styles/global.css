@@ -251,3 +251,39 @@ body {
   white-space: nowrap;
   padding: 0 2px;
 }
+
+/* === Calculator buttons (cennik) === */
+
+.calc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--color-ink-secondary);
+  background: var(--color-surface-raised);
+  border: 1.5px solid var(--color-border);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.calc-btn:hover {
+  background: var(--color-surface-sunken);
+  border-color: var(--color-ink-muted);
+}
+
+.calc-btn-active {
+  background: var(--color-brand-500);
+  color: white;
+  border-color: var(--color-brand-500);
+  box-shadow: 0 2px 8px rgba(194, 65, 12, 0.25);
+}
+
+.calc-btn-active:hover {
+  background: var(--color-brand-600);
+  border-color: var(--color-brand-600);
+}

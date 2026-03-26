@@ -70,12 +70,26 @@ const fullTitle = `${title} | niejedzie.pl`;
       "description": "Monitor przesiadek i opóźnień pociągów PKP w czasie rzeczywistym.",
       "applicationCategory": "TravelApplication",
       "operatingSystem": "Web",
-      "offers": {
-        "@type": "Offer",
-        "price": "5.00",
-        "priceCurrency": "PLN",
-        "description": "Jednorazowy monitoring przesiadki"
-      },
+      "offers": [
+        {
+          "@type": "Offer",
+          "price": "15.00",
+          "priceCurrency": "PLN",
+          "description": "Plan miesięczny — nielimitowany monitoring przesiadek",
+          "priceSpecification": {
+            "@type": "UnitPriceSpecification",
+            "price": "15.00",
+            "priceCurrency": "PLN",
+            "billingDuration": "P1M"
+          }
+        },
+        {
+          "@type": "Offer",
+          "price": "5.00",
+          "priceCurrency": "PLN",
+          "description": "Jednorazowy monitoring przesiadki"
+        }
+      ],
       "inLanguage": "pl",
       "provider": {
         "@type": "Organization",
@@ -86,8 +100,8 @@ const fullTitle = `${title} | niejedzie.pl`;
   <body>
     <header class="sticky top-0 z-50 bg-cream/85 backdrop-blur-xl border-b border-border">
       <nav class="max-w-5xl mx-auto px-5 h-14 flex items-center justify-between">
-        <a href="/" class="block">
-          <img src="/logo.svg" alt="niejedzie.pl" class="h-7" />
+        <a href="/" class="group flex items-baseline gap-[1px]">
+          <span class="text-[1.2rem] font-extrabold tracking-[-0.03em] text-ink">nie</span><span class="text-[1.2rem] font-extrabold tracking-[-0.03em] text-brand-500 group-hover:text-brand-600 transition-colors">jedzie</span><span class="text-[0.8rem] font-medium text-ink-faint ml-[2px] tracking-tight">.pl</span>
         </a>
         <div class="flex items-center gap-0.5">
           <a href="/opoznienia" class="px-3 py-1.5 text-[0.8125rem] font-medium text-ink-muted hover:text-ink hover:bg-cream-dark rounded-lg transition-all">Opóźnienia</a>
@@ -104,7 +118,9 @@ const fullTitle = `${title} | niejedzie.pl`;
       <div class="max-w-5xl mx-auto px-5 py-10">
         <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
           <div>
-            <img src="/logo.svg" alt="niejedzie.pl" class="h-6 mb-2" />
+            <div class="flex items-baseline gap-[1px] mb-2">
+              <span class="text-[1.1rem] font-extrabold tracking-[-0.03em] text-ink">nie</span><span class="text-[1.1rem] font-extrabold tracking-[-0.03em] text-brand-500">jedzie</span><span class="text-[0.75rem] font-medium text-ink-faint ml-[2px] tracking-tight">.pl</span>
+            </div>
             <p class="text-xs text-ink-faint max-w-xs">
               Monitor przesiadek i opóźnień pociągów PKP. Dane z Otwartych Danych Kolejowych PKP PLK.
             </p>
