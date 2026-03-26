@@ -6,6 +6,7 @@
 //   0 2 * * *     — aggregateDaily (yesterday's stats -> D1, prune old data)
 
 import { fetchFromScraper } from './scraper';
+import { fetchGtfsRtStats, type GtfsRtStats } from './gtfs-rt';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -108,6 +109,12 @@ interface TodayStats {
 	punctualityPct: number;
 	cancelledCount: number;
 	onTimeCount: number;
+	/** Total trains from GTFS-RT feed (all target agencies). Null if feed unavailable. */
+	gtfsRtTotalTrains: number | null;
+	/** Per-agency train counts from GTFS-RT feed. Null if feed unavailable. */
+	gtfsRtByAgency: Record<string, number> | null;
+	/** Punctuality corrected using GTFS-RT denominator: (gtfsTotal - delayed) / gtfsTotal */
+	correctedPunctualityPct: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -267,7 +274,14 @@ async function pollOperations(env: Env): Promise<void> {
 		{ expirationTtl: 180 },
 	);
 
-	// 3. Compute summary stats → KV
+	// 3. Fetch GTFS-RT stats in parallel with stats computation
+	//    This gives us the real total train count across all operators.
+	const gtfsRtPromise = fetchGtfsRtStats(env).catch((err) => {
+		console.error(`[pollOperations] GTFS-RT fetch failed: ${err}`);
+		return null as GtfsRtStats | null;
+	});
+
+	// 4. Compute summary stats from scraped/API delay data
 	let totalDelay = 0;
 	let delayCount = 0;
 	let onTimeCount = 0;
@@ -308,6 +322,35 @@ async function pollOperations(env: Env): Promise<void> {
 			? Math.round((onTimeCount / totalTrains) * 1000) / 10
 			: 0;
 
+	// 5. Await GTFS-RT stats and compute corrected punctuality
+	const gtfsRtStats = await gtfsRtPromise;
+
+	// Corrected punctuality: uses GTFS-RT total as denominator.
+	// The scraper/API only returns DELAYED trains, so totalTrains from scraper
+	// is really "delayed train count". GTFS-RT gives us ALL running trains.
+	// Formula: (gtfsTotal - delayedTrains - cancelledTrains) / gtfsTotal * 100
+	//
+	// "delayedTrains" = trains with max delay > 5 min (from scraper data)
+	// We know: onTimeCount + cancelledCount + delayedAbove5 = totalTrains (from scraper)
+	// So delayedAbove5 = totalTrains - onTimeCount - cancelledCount
+	let correctedPunctualityPct: number | null = null;
+
+	if (gtfsRtStats && gtfsRtStats.totalTrains > 0) {
+		const delayedTrains = totalTrains - onTimeCount - cancelledCount;
+		const correctedOnTime = gtfsRtStats.totalTrains - delayedTrains - cancelledCount;
+		correctedPunctualityPct =
+			Math.round((correctedOnTime / gtfsRtStats.totalTrains) * 1000) / 10;
+
+		console.log(
+			`[pollOperations] GTFS-RT — ${gtfsRtStats.totalTrains} total trains running. ` +
+			`Corrected punctuality: ${correctedPunctualityPct}% ` +
+			`(${correctedOnTime} on-time of ${gtfsRtStats.totalTrains}, ` +
+			`${delayedTrains} delayed >5min, ${cancelledCount} cancelled)`,
+		);
+	} else {
+		console.log('[pollOperations] GTFS-RT unavailable — using scraper-only punctuality');
+	}
+
 	const todayStats: TodayStats = {
 		timestamp: new Date().toISOString(),
 		totalTrains,
@@ -315,6 +358,9 @@ async function pollOperations(env: Env): Promise<void> {
 		punctualityPct,
 		cancelledCount,
 		onTimeCount,
+		gtfsRtTotalTrains: gtfsRtStats?.totalTrains ?? null,
+		gtfsRtByAgency: gtfsRtStats?.byAgency ?? null,
+		correctedPunctualityPct,
 	};
 
 	await env.DELAYS_KV.put("stats:today", JSON.stringify(todayStats), {
@@ -323,10 +369,12 @@ async function pollOperations(env: Env): Promise<void> {
 
 	console.log(
 		`[pollOperations] Stats — trains: ${totalTrains}, onTime: ${onTimeCount}, ` +
-			`avgDelay: ${avgDelay}min, cancelled: ${cancelledCount}, punctuality: ${punctualityPct}%`,
+			`avgDelay: ${avgDelay}min, cancelled: ${cancelledCount}, ` +
+			`punctuality: ${punctualityPct}%` +
+			(correctedPunctualityPct !== null ? ` (corrected: ${correctedPunctualityPct}%)` : ''),
 	);
 
-	// 4. Batch INSERT OR REPLACE into delay_snapshots
+	// 6. Batch INSERT OR REPLACE into delay_snapshots
 	const insertStmt = env.DB.prepare(`
 		INSERT OR REPLACE INTO delay_snapshots
 			(schedule_id, order_id, operating_date, station_id, station_name,
@@ -362,10 +410,10 @@ async function pollOperations(env: Env): Promise<void> {
 	const inserted = await batchExecute(env.DB, batch);
 	console.log(`[pollOperations] Wrote ${inserted} station snapshots to D1`);
 
-	// 5. Backfill train metadata for any new schedule_id/order_id combos
+	// 7. Backfill train metadata for any new schedule_id/order_id combos
 	await backfillTrainMetadata(env, allTrains, today);
 
-	// 6. Check active monitoring sessions
+	// 8. Check active monitoring sessions
 	await checkMonitoringSessions(env, allTrains);
 }
 
@@ -990,6 +1038,21 @@ export default {
 			} catch (err) {
 				return Response.json(
 					{ error: "scraper failed", message: String(err) },
+					{ status: 500 },
+				);
+			}
+		}
+
+		if (url.pathname === "/__trigger/gtfs-rt") {
+			try {
+				const stats = await fetchGtfsRtStats(env);
+				return Response.json({
+					triggered: "gtfs-rt",
+					stats,
+				});
+			} catch (err) {
+				return Response.json(
+					{ error: "gtfs-rt failed", message: String(err) },
 					{ status: 500 },
 				);
 			}
