@@ -70,6 +70,8 @@ const DELAYS_TAB_URL = `${PORTAL_BASE}/Opoznienia/Index`;
 const SESSION_KV_KEY = 'scraper:session';
 const SESSION_TTL = 600; // 10 minutes
 const PAGE_FETCH_DELAY_MS = 500;
+const DETAIL_FETCH_DELAY_MS = 500;
+const MAX_DETAIL_PAGES_PER_CYCLE = 10;
 const USER_AGENT = 'niejedzie.pl/1.0 (train delay tracker; contact@niejedzie.pl)';
 
 // ---------------------------------------------------------------------------
@@ -297,6 +299,225 @@ function getNextPageNumber(html: string): number | null {
 }
 
 // ---------------------------------------------------------------------------
+// Detail page parsing
+// ---------------------------------------------------------------------------
+
+/**
+ * Decode HTML entities (&#x27;, &amp;, etc.) commonly found in station names.
+ */
+function decodeHtmlEntities(str: string): string {
+	return str
+		.replace(/&#x([0-9A-Fa-f]+);/g, (_m, hex) => String.fromCharCode(parseInt(hex, 16)))
+		.replace(/&#(\d+);/g, (_m, dec) => String.fromCharCode(parseInt(dec, 10)))
+		.replace(/&amp;/g, '&')
+		.replace(/&lt;/g, '<')
+		.replace(/&gt;/g, '>')
+		.replace(/&quot;/g, '"')
+		.replace(/&apos;/g, "'");
+}
+
+/**
+ * Parse an HH:MM time string into total minutes since midnight.
+ * Returns null if the string is not a valid time.
+ */
+function parseTimeToMinutes(timeStr: string): number | null {
+	const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})$/);
+	if (!match) return null;
+	const hours = parseInt(match[1], 10);
+	const minutes = parseInt(match[2], 10);
+	if (hours < 0 || hours > 23 || minutes < 0 || minutes > 59) return null;
+	return hours * 60 + minutes;
+}
+
+/**
+ * Calculate delay in minutes between an actual and planned time.
+ * Handles midnight crossing (e.g., planned 23:50, actual 00:10 = 20 min delay).
+ * Returns null if either time is null.
+ */
+function calculateDelayMinutes(actualMinutes: number | null, plannedMinutes: number | null): number | null {
+	if (actualMinutes === null || plannedMinutes === null) return null;
+	let diff = actualMinutes - plannedMinutes;
+	// Handle midnight crossing: if diff is very negative, the train crossed midnight
+	if (diff < -720) {
+		diff += 1440; // 24 * 60
+	}
+	// If diff is very positive (> 12 hours), it's likely the planned time was after midnight
+	if (diff > 720) {
+		diff -= 1440;
+	}
+	return diff;
+}
+
+/**
+ * Convert an HH:MM time string into a full ISO datetime string for today.
+ * Returns null if the input is not a valid time.
+ */
+function timeToIsoString(timeStr: string): string | null {
+	const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})$/);
+	if (!match) return null;
+	const today = new Date().toISOString().split('T')[0];
+	const hours = match[1].padStart(2, '0');
+	const minutes = match[2];
+	return `${today}T${hours}:${minutes}:00`;
+}
+
+/**
+ * Fetch and parse a train detail page to extract per-station timing data.
+ *
+ * The detail page contains a timeline with each station along the route,
+ * including planned/actual arrival and departure times.
+ *
+ * Returns an array of ApiStation objects, or null if parsing fails.
+ */
+async function scrapeTrainDetail(session: ScrapingSession, detailUrl: string): Promise<ApiStation[] | null> {
+	const fullUrl = `${PORTAL_BASE}${detailUrl}`;
+
+	const res = await fetch(fullUrl, {
+		headers: {
+			'User-Agent': USER_AGENT,
+			'Accept': 'text/html,application/xhtml+xml',
+			'Accept-Language': 'pl-PL,pl;q=0.9',
+			'Cookie': buildCookieHeader(session),
+		},
+		redirect: 'follow',
+	});
+
+	if (!res.ok) {
+		console.warn(`[scraper:detail] Fetch failed: ${res.status} for ${detailUrl.substring(0, 80)}`);
+		return null;
+	}
+
+	const html = await res.text();
+	return parseTrainDetailPage(html);
+}
+
+/**
+ * Parse the detail page HTML into an array of ApiStation objects.
+ *
+ * HTML structure:
+ * - Each station is in a `timeline__content-station` block
+ * - Station name is inside <h3>, after "Stacja N:" prefix
+ * - Times are in `timeline__numbers-time__stop` blocks with HH:MM values
+ * - Each station has up to 4 time slots: planned_arr, planned_dep, actual_arr, actual_dep
+ * - First station (origin): departure only
+ * - Last station (terminus): arrival only
+ * - Intermediate stations: both arrival and departure
+ */
+function parseTrainDetailPage(html: string): ApiStation[] | null {
+	const stations: ApiStation[] = [];
+
+	// Extract station blocks — split by timeline station markers
+	// Each station section contains the station name and its time data
+	const stationBlockRegex = /timeline__content-station[\s\S]*?(?=timeline__content-station|timeline__footer|$)/g;
+	const stationBlocks = html.match(stationBlockRegex);
+
+	if (!stationBlocks || stationBlocks.length === 0) {
+		console.warn('[scraper:detail] No station blocks found on detail page');
+		return null;
+	}
+
+	for (let i = 0; i < stationBlocks.length; i++) {
+		const block = stationBlocks[i];
+
+		// Extract station name from <h3> tag, after "Stacja N:" prefix
+		const nameMatch = block.match(/<h3[^>]*>[\s\S]*?Stacja\s+\d+:\s*([^<]+)<\/h3>/i)
+			?? block.match(/<h3[^>]*>\s*([^<]+)<\/h3>/i);
+
+		if (!nameMatch) continue;
+
+		const stationName = decodeHtmlEntities(nameMatch[1].trim());
+
+		// Extract all HH:MM time values from this block
+		const timeRegex = /(\d{1,2}:\d{2})/g;
+		const times: string[] = [];
+		let timeMatch: RegExpExecArray | null;
+		while ((timeMatch = timeRegex.exec(block)) !== null) {
+			times.push(timeMatch[1]);
+		}
+
+		const isFirst = i === 0;
+		const isLast = i === stationBlocks.length - 1;
+
+		let plannedArrival: string | null = null;
+		let plannedDeparture: string | null = null;
+		let actualArrival: string | null = null;
+		let actualDeparture: string | null = null;
+		let arrivalDelayMinutes: number | null = null;
+		let departureDelayMinutes: number | null = null;
+
+		if (isFirst && times.length >= 2) {
+			// Origin station: departure only
+			// times[0] = planned departure, times[1] = actual departure
+			plannedDeparture = timeToIsoString(times[0]);
+			actualDeparture = timeToIsoString(times[1]);
+			departureDelayMinutes = calculateDelayMinutes(
+				parseTimeToMinutes(times[1]),
+				parseTimeToMinutes(times[0]),
+			);
+		} else if (isLast && times.length >= 2) {
+			// Terminus: arrival only
+			// times[0] = planned arrival, times[1] = actual arrival
+			plannedArrival = timeToIsoString(times[0]);
+			actualArrival = timeToIsoString(times[1]);
+			arrivalDelayMinutes = calculateDelayMinutes(
+				parseTimeToMinutes(times[1]),
+				parseTimeToMinutes(times[0]),
+			);
+		} else if (times.length >= 4) {
+			// Intermediate station: arrival + departure
+			// times[0] = planned arrival, times[1] = planned departure
+			// times[2] = actual arrival, times[3] = actual departure
+			plannedArrival = timeToIsoString(times[0]);
+			plannedDeparture = timeToIsoString(times[1]);
+			actualArrival = timeToIsoString(times[2]);
+			actualDeparture = timeToIsoString(times[3]);
+			arrivalDelayMinutes = calculateDelayMinutes(
+				parseTimeToMinutes(times[2]),
+				parseTimeToMinutes(times[0]),
+			);
+			departureDelayMinutes = calculateDelayMinutes(
+				parseTimeToMinutes(times[3]),
+				parseTimeToMinutes(times[1]),
+			);
+		} else if (times.length >= 2) {
+			// Fallback: treat as arrival only if we can't determine position
+			plannedArrival = timeToIsoString(times[0]);
+			actualArrival = timeToIsoString(times[1]);
+			arrivalDelayMinutes = calculateDelayMinutes(
+				parseTimeToMinutes(times[1]),
+				parseTimeToMinutes(times[0]),
+			);
+		}
+
+		// Detect delay/cancellation status from CSS classes
+		const hasAlert = /color--alert/i.test(block);
+		const hasWarn = /color--warn/i.test(block);
+		const isCancelled = /odwo[lł]an/i.test(block);
+
+		stations.push({
+			stationId: hashCode(stationName),
+			stationName,
+			sequenceNumber: i + 1,
+			plannedArrival,
+			plannedDeparture,
+			actualArrival,
+			actualDeparture,
+			arrivalDelayMinutes,
+			departureDelayMinutes,
+			isConfirmed: hasAlert || hasWarn || (actualArrival !== null || actualDeparture !== null),
+			isCancelled,
+		});
+	}
+
+	if (stations.length === 0) {
+		console.warn('[scraper:detail] Parsed 0 stations from detail page');
+		return null;
+	}
+
+	return stations;
+}
+
+// ---------------------------------------------------------------------------
 // Scraping orchestration
 // ---------------------------------------------------------------------------
 
@@ -387,11 +608,14 @@ function hashCode(str: string): number {
 /**
  * Transform scraped trains into the ApiTrain[] format expected by the pipeline.
  *
- * Since Portal Pasażera's list view only gives us summary delay info (not
- * per-station breakdowns), we create a simplified ApiTrain with a single
- * station entry representing the last known delay.
+ * When a detail map is provided, trains with per-station data from the detail
+ * page will have full station arrays. Trains without detail data fall back to
+ * a single summary station entry from the list view.
  */
-function transformToApiFormat(scraped: ScrapedTrain[]): ApiTrain[] {
+function transformToApiFormat(
+	scraped: ScrapedTrain[],
+	detailMap: Map<string, ApiStation[]> = new Map(),
+): ApiTrain[] {
 	const today = new Date().toISOString().split('T')[0];
 	const now = new Date().toISOString();
 
@@ -403,21 +627,32 @@ function transformToApiFormat(scraped: ScrapedTrain[]): ApiTrain[] {
 		// Create a stable schedule ID from the train identity + date
 		const scheduleId = hashCode(`${fullTrainNumber}-${today}`);
 
-		// Build a single station entry representing the current delay state.
-		// We use the destination as the station since the delay is the overall delay.
-		const station: ApiStation = {
-			stationId: hashCode(train.routeTo || 'unknown'),
-			stationName: train.routeTo || 'Nieznana',
-			sequenceNumber: 1,
-			plannedArrival: now,
-			plannedDeparture: null,
-			actualArrival: null,
-			actualDeparture: null,
-			arrivalDelayMinutes: train.delayMinutes,
-			departureDelayMinutes: null,
-			isConfirmed: true,
-			isCancelled: false,
-		};
+		// Check if we have detailed per-station data for this train
+		const trainKey = `${train.carrier}-${train.trainNumber}`;
+		const detailStations = detailMap.get(trainKey);
+
+		let stations: ApiStation[];
+
+		if (detailStations && detailStations.length > 0) {
+			// Use the full per-station data from the detail page
+			stations = detailStations;
+		} else {
+			// Fall back to a single station entry from the list view summary
+			const station: ApiStation = {
+				stationId: hashCode(train.routeTo || 'unknown'),
+				stationName: train.routeTo || 'Nieznana',
+				sequenceNumber: 1,
+				plannedArrival: now,
+				plannedDeparture: null,
+				actualArrival: null,
+				actualDeparture: null,
+				arrivalDelayMinutes: train.delayMinutes,
+				departureDelayMinutes: null,
+				isConfirmed: true,
+				isCancelled: false,
+			};
+			stations = [station];
+		}
 
 		return {
 			scheduleId,
@@ -427,7 +662,7 @@ function transformToApiFormat(scraped: ScrapedTrain[]): ApiTrain[] {
 			category: train.carrier || undefined,
 			routeStartStation: train.routeFrom || undefined,
 			routeEndStation: train.routeTo || undefined,
-			stations: [station],
+			stations,
 		};
 	});
 }
@@ -445,10 +680,70 @@ function sleep(ms: number): Promise<void> {
 // ---------------------------------------------------------------------------
 
 /**
+ * Fetch detail pages for the top N scraped trains and enrich them with
+ * per-station timing data. Respects rate limits with delays between requests.
+ *
+ * Returns a Map of train key → ApiStation[] for trains that were successfully
+ * enriched with detail data.
+ */
+async function fetchTrainDetails(
+	session: ScrapingSession,
+	scraped: ScrapedTrain[],
+): Promise<Map<string, ApiStation[]>> {
+	const detailMap = new Map<string, ApiStation[]>();
+
+	// Only fetch details for trains that have a detail URL
+	const trainsWithDetails = scraped.filter((t) => t.detailUrl !== null);
+
+	// Sort by delay descending — prioritize the most delayed trains
+	trainsWithDetails.sort((a, b) => b.delayMinutes - a.delayMinutes);
+
+	// Limit to MAX_DETAIL_PAGES_PER_CYCLE per cycle
+	const toFetch = trainsWithDetails.slice(0, MAX_DETAIL_PAGES_PER_CYCLE);
+
+	if (toFetch.length === 0) {
+		console.log('[scraper:detail] No trains have detail URLs');
+		return detailMap;
+	}
+
+	console.log(`[scraper:detail] Fetching ${toFetch.length} detail pages (of ${trainsWithDetails.length} available)`);
+
+	let successCount = 0;
+	let failCount = 0;
+
+	for (let i = 0; i < toFetch.length; i++) {
+		const train = toFetch[i];
+		const trainKey = `${train.carrier}-${train.trainNumber}`;
+
+		try {
+			const stations = await scrapeTrainDetail(session, train.detailUrl!);
+			if (stations && stations.length > 0) {
+				detailMap.set(trainKey, stations);
+				successCount++;
+			} else {
+				failCount++;
+			}
+		} catch (err) {
+			console.warn(`[scraper:detail] Failed for ${trainKey}: ${err}`);
+			failCount++;
+		}
+
+		// Delay between requests (skip after the last one)
+		if (i < toFetch.length - 1) {
+			await sleep(DETAIL_FETCH_DELAY_MS);
+		}
+	}
+
+	console.log(`[scraper:detail] Fetched ${successCount} detail pages (${failCount} failed)`);
+	return detailMap;
+}
+
+/**
  * Main entry point — fetch delay data from Portal Pasażera scraper.
  *
- * Handles the full flow: session management, scraping, and transformation.
- * Returns ApiTrain[] compatible with the existing pipeline, or null on failure.
+ * Handles the full flow: session management, scraping, detail page enrichment,
+ * and transformation. Returns ApiTrain[] compatible with the existing pipeline,
+ * or null on failure.
  */
 export async function fetchFromScraper(env: Env): Promise<ApiTrain[] | null> {
 	try {
@@ -462,8 +757,11 @@ export async function fetchFromScraper(env: Env): Promise<ApiTrain[] | null> {
 			return [];
 		}
 
-		const trains = transformToApiFormat(scraped);
-		console.log(`[scraper] Transformed ${trains.length} trains to API format`);
+		// Fetch per-station detail pages for top trains
+		const detailMap = await fetchTrainDetails(session, scraped);
+
+		const trains = transformToApiFormat(scraped, detailMap);
+		console.log(`[scraper] Transformed ${trains.length} trains to API format (${detailMap.size} with station details)`);
 
 		return trains;
 	} catch (err) {
