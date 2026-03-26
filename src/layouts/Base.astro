@@ -104,8 +104,8 @@ const fullTitle = `${title} | niejedzie.pl`;
           <span class="text-[1.2rem] font-extrabold tracking-[-0.03em] text-ink">nie</span><span class="text-[1.2rem] font-extrabold tracking-[-0.03em] text-brand-500 group-hover:text-brand-600 transition-colors">jedzie</span><span class="text-[0.8rem] font-medium text-ink-faint ml-[2px] tracking-tight">.pl</span>
         </a>
         <div class="flex items-center gap-0.5">
-          <a href="/opoznienia" class="px-3 py-1.5 text-[0.8125rem] font-medium text-ink-muted hover:text-ink hover:bg-cream-dark rounded-lg transition-all">Opóźnienia</a>
-          <a href="/statystyki" class="px-3 py-1.5 text-[0.8125rem] font-medium text-ink-muted hover:text-ink hover:bg-cream-dark rounded-lg transition-all">Statystyki</a>
+          <a href="/opoznienia/dzisiaj" class="px-3 py-1.5 text-[0.8125rem] font-medium text-ink-muted hover:text-ink hover:bg-cream-dark rounded-lg transition-all">Opóźnienia</a>
+          <a href="/gdzie-jest-pociag" class="px-3 py-1.5 text-[0.8125rem] font-medium text-ink-muted hover:text-ink hover:bg-cream-dark rounded-lg transition-all">Znajdź pociąg</a>
           <a href="/cennik" class="px-3 py-1.5 text-[0.8125rem] font-medium text-ink-muted hover:text-ink hover:bg-cream-dark rounded-lg transition-all">Cennik</a>
           <a href="/o-nas" class="px-3 py-1.5 text-[0.8125rem] font-medium text-ink-muted hover:text-ink hover:bg-cream-dark rounded-lg transition-all">O nas</a>
         </div>
@@ -128,11 +128,21 @@ const fullTitle = `${title} | niejedzie.pl`;
           <div class="flex gap-8 text-[0.8125rem]">
             <div class="space-y-2">
               <p class="section-label">Narzędzia</p>
-              <a href="/jak-sprawdzic-opoznienie" class="block text-ink-muted hover:text-ink transition-colors">Poradnik</a>
-              <a href="/odszkodowanie-za-opoznienie" class="block text-ink-muted hover:text-ink transition-colors">Odszkodowanie</a>
+              <a href="/opoznienia/dzisiaj" class="block text-ink-muted hover:text-ink transition-colors">Opóźnienia dziś</a>
+              <a href="/gdzie-jest-pociag" class="block text-ink-muted hover:text-ink transition-colors">Znajdź pociąg</a>
+              <a href="/punktualnosc" class="block text-ink-muted hover:text-ink transition-colors">Punktualność</a>
+            </div>
+            <div class="space-y-2">
+              <p class="section-label">Miasta</p>
+              <a href="/opoznienia/warszawa" class="block text-ink-muted hover:text-ink transition-colors">Warszawa</a>
+              <a href="/opoznienia/krakow" class="block text-ink-muted hover:text-ink transition-colors">Kraków</a>
+              <a href="/opoznienia/gdansk" class="block text-ink-muted hover:text-ink transition-colors">Gdańsk</a>
+              <a href="/opoznienia/wroclaw" class="block text-ink-muted hover:text-ink transition-colors">Wrocław</a>
             </div>
             <div class="space-y-2">
               <p class="section-label">Informacje</p>
+              <a href="/jak-sprawdzic-opoznienie" class="block text-ink-muted hover:text-ink transition-colors">Poradnik</a>
+              <a href="/odszkodowanie-za-opoznienie" class="block text-ink-muted hover:text-ink transition-colors">Odszkodowanie</a>
               <a href="/reklamacja-pkp" class="block text-ink-muted hover:text-ink transition-colors">Reklamacja PKP</a>
               <a href="/o-nas" class="block text-ink-muted hover:text-ink transition-colors">O nas</a>
             </div>
