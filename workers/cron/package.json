@@ -1,0 +1,16 @@
+{
+	"name": "niejedzie-cron",
+	"version": "0.0.1",
+	"private": true,
+	"type": "module",
+	"scripts": {
+		"dev": "wrangler dev --test-scheduled",
+		"deploy": "wrangler deploy",
+		"tail": "wrangler tail"
+	},
+	"devDependencies": {
+		"typescript": "^5.8.0",
+		"wrangler": "^4.77.0",
+		"@cloudflare/workers-types": "^4.20250317.0"
+	}
+}

@@ -1,15 +1,7 @@
 {
+	"name": "niejedzie-cron",
+	"main": "src/index.ts",
 	"compatibility_date": "2026-03-17",
-	"compatibility_flags": ["global_fetch_strictly_public"],
-	"name": "niejedzie",
-	"main": "@astrojs/cloudflare/entrypoints/server",
-	"assets": {
-		"directory": "./dist",
-		"binding": "ASSETS"
-	},
-	"observability": {
-		"enabled": true
-	},
 	"d1_databases": [
 		{
 			"binding": "DB",
@@ -22,5 +14,8 @@
 			"binding": "DELAYS_KV",
 			"id": "9ed4ec652775490e8e1c3e73e92e4208"
 		}
-	]
+	],
+	"triggers": {
+		"crons": ["*/2 * * * *", "*/5 * * * *", "0 2 * * *"]
+	}
 }
