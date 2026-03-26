@@ -1,5 +1,9 @@
 ---
 import Base from '../layouts/Base.astro';
+import { fetchTodayDelays } from '../lib/fetch-data';
+
+const todayData = await fetchTodayDelays();
+const liveStats = todayData?.stats;
 ---
 <Base title="Monitor przesiadek PKP — dostaniesz alert jeśli nie zdążysz">
 
@@ -97,7 +101,7 @@ import Base from '../layouts/Base.astro';
     <div class="px-8 py-12">
       <div class="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
         <div>
-          <div class="stat-value text-white">~73%</div>
+          <div class="stat-value text-white">{liveStats && liveStats.punctuality > 0 ? liveStats.punctuality.toFixed(0) + '%' : '~73%'}</div>
           <p class="font-ticket text-[0.625rem] text-white/30 mt-3 tracking-wider uppercase">Punktualność PKP IC</p>
         </div>
         <div>

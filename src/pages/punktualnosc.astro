@@ -1,6 +1,86 @@
 ---
+export const prerender = false;
+
 import Base from '../layouts/Base.astro';
 import StatCard from '../components/StatCard.astro';
+import { fetchMonthlyStats } from '../lib/fetch-data';
+
+// --- Mock fallback data ---
+const MOCK_MONTHLY_TREND = [
+  { month: 'Kwi 25', punctuality: 78.4 }, { month: 'Maj 25', punctuality: 80.1 },
+  { month: 'Cze 25', punctuality: 82.3 }, { month: 'Lip 25', punctuality: 83.7 },
+  { month: 'Sie 25', punctuality: 81.2 }, { month: 'Wrz 25', punctuality: 79.5 },
+  { month: 'Paź 25', punctuality: 76.8 }, { month: 'Lis 25', punctuality: 74.1 },
+  { month: 'Gru 25', punctuality: 71.3 }, { month: 'Sty 26', punctuality: 68.2 },
+  { month: 'Lut 26', punctuality: 70.5 }, { month: 'Mar 26', punctuality: 73.2 },
+];
+const MOCK_OPERATORS = [
+  { carrier: 'SKM Trójmiasto', punctuality: 85 },
+  { carrier: 'PolRegio', punctuality: 81 },
+  { carrier: 'Koleje Mazowieckie', punctuality: 78 },
+  { carrier: 'PKP Intercity', punctuality: 73 },
+];
+const MOCK_CATEGORIES = [
+  { category: 'EIP', punctuality: 82 },
+  { category: 'EIC', punctuality: 76 },
+  { category: 'IC', punctuality: 71 },
+  { category: 'TLK', punctuality: 68 },
+];
+
+// --- Fetch live data ---
+const monthlyData = await fetchMonthlyStats();
+const hasLiveMonthly = (monthlyData?.monthlyTrend?.length ?? 0) > 0;
+const hasLiveOperators = (monthlyData?.byOperator?.length ?? 0) > 0;
+const hasLiveCategories = (monthlyData?.byCategory?.length ?? 0) > 0;
+
+// Month formatter: "2026-03" → "Mar 26"
+const fmtMonth = (m: string) => {
+  const [y, mo] = m.split('-');
+  const names = ['Sty','Lut','Mar','Kwi','Maj','Cze','Lip','Sie','Wrz','Paź','Lis','Gru'];
+  return names[parseInt(mo, 10) - 1] + ' ' + y.slice(2);
+};
+
+// Build chart data (live or mock)
+const trendMonths = hasLiveMonthly
+  ? monthlyData!.monthlyTrend.map(t => fmtMonth(t.month))
+  : MOCK_MONTHLY_TREND.map(t => t.month);
+const trendValues = hasLiveMonthly
+  ? monthlyData!.monthlyTrend.map(t => t.punctuality)
+  : MOCK_MONTHLY_TREND.map(t => t.punctuality);
+
+const operatorNames = hasLiveOperators
+  ? monthlyData!.byOperator.map(o => o.carrier)
+  : MOCK_OPERATORS.map(o => o.carrier);
+const operatorValues = hasLiveOperators
+  ? monthlyData!.byOperator.map(o => o.punctuality)
+  : MOCK_OPERATORS.map(o => o.punctuality);
+
+const categoryNames = hasLiveCategories
+  ? monthlyData!.byCategory.map(c => c.category)
+  : MOCK_CATEGORIES.map(c => c.category);
+const categoryValues = hasLiveCategories
+  ? monthlyData!.byCategory.map(c => c.punctuality)
+  : MOCK_CATEGORIES.map(c => c.punctuality);
+
+// Gauge: average punctuality
+const avgPunctuality = trendValues.length > 0
+  ? Math.round(trendValues.reduce((a, b) => a + b, 0) / trendValues.length * 10) / 10
+  : 73.2;
+
+// Best operator / worst category for stat cards
+const bestOperator = hasLiveOperators
+  ? monthlyData!.byOperator.reduce((a, b) => a.punctuality > b.punctuality ? a : b)
+  : { carrier: 'SKM Trójmiasto', punctuality: 85 };
+const worstCategory = hasLiveCategories
+  ? monthlyData!.byCategory.reduce((a, b) => a.punctuality < b.punctuality ? a : b)
+  : { category: 'TLK', punctuality: 68 };
+
+// Avg delay from operators
+const avgDelay = hasLiveOperators
+  ? (monthlyData!.byOperator.reduce((s, o) => s + o.avgDelay, 0) / monthlyData!.byOperator.length).toFixed(1).replace('.', ',') + ' min'
+  : '6,7 min';
+
+const usesLiveData = hasLiveMonthly || hasLiveOperators || hasLiveCategories;
 ---
 <Base
   title="Punktualność PKP — statystyki i rankingi"
@@ -34,7 +114,7 @@ import StatCard from '../components/StatCard.astro';
       Jak punktualne są pociągi w Polsce? Sprawdź statystyki miesięczne, rankingi przewoźników i tras.
     </p>
     <p class="font-ticket text-[0.625rem] text-ink-faint tracking-wider uppercase">
-      Okres: kwiecień 2025 &mdash; marzec 2026 &middot; Źródło: PKP PLK Otwarte Dane Kolejowe
+      {usesLiveData ? 'Dane historyczne — aktualizowane codziennie' : 'Okres: kwiecień 2025 — marzec 2026'} &middot; Źródło: PKP PLK Otwarte Dane Kolejowe
     </p>
   </section>
 
@@ -53,13 +133,13 @@ import StatCard from '../components/StatCard.astro';
 
       <!-- Key stats -->
       <div class="md:col-span-2 grid grid-cols-2 gap-3">
-        <StatCard value="73,2%" label="Punktualność ogółem" color="warn" trend="down" trendValue="-1,8pp r/r" />
-        <StatCard value="6,7 min" label="Średnie opóźnienie" color="brand" trend="up" trendValue="+0,4 min" />
-        <StatCard value="85%" label="Najlepszy przewoźnik" color="safe">
-          <p class="font-ticket text-[0.5625rem] text-ink-faint mt-1 tracking-wider uppercase">SKM Trójmiasto</p>
+        <StatCard value={avgPunctuality.toFixed(1).replace('.', ',') + '%'} label="Punktualność ogółem" color={avgPunctuality >= 80 ? 'safe' : avgPunctuality >= 60 ? 'warn' : 'danger'} />
+        <StatCard value={avgDelay} label="Średnie opóźnienie" color="brand" />
+        <StatCard value={bestOperator.punctuality + '%'} label="Najlepszy przewoźnik" color="safe">
+          <p class="font-ticket text-[0.5625rem] text-ink-faint mt-1 tracking-wider uppercase">{bestOperator.carrier}</p>
         </StatCard>
-        <StatCard value="68%" label="Najgorsza kategoria" color="danger">
-          <p class="font-ticket text-[0.5625rem] text-ink-faint mt-1 tracking-wider uppercase">TLK (twoje linie kolejowe)</p>
+        <StatCard value={worstCategory.punctuality + '%'} label="Najgorsza kategoria" color="danger">
+          <p class="font-ticket text-[0.5625rem] text-ink-faint mt-1 tracking-wider uppercase">{worstCategory.category}</p>
         </StatCard>
       </div>
     </div>
@@ -242,11 +322,28 @@ import StatCard from '../components/StatCard.astro';
 
 </Base>
 
+<!-- Pass SSR data to browser for charts -->
+<script define:vars={{
+  gaugeValue: avgPunctuality,
+  lineMonths: trendMonths,
+  lineValues: trendValues,
+  opNames: operatorNames,
+  opValues: operatorValues,
+  catNames: categoryNames,
+  catValues: categoryValues,
+}}>
+  window.__punktCharts = {
+    gaugeValue, lineMonths, lineValues,
+    opNames, opValues, catNames, catValues,
+  };
+</script>
+
 <!-- Overall punctuality gauge -->
 <script>
   import ApexCharts from 'apexcharts';
 
-  const punctuality = 73.2;
+  const d = (window as any).__punktCharts;
+  const punctuality = d.gaugeValue;
   const gaugeColor = punctuality >= 80 ? '#16a34a' : punctuality >= 60 ? '#d97706' : '#dc2626';
 
   const gaugeOptions: ApexCharts.ApexOptions = {
@@ -301,8 +398,9 @@ import StatCard from '../components/StatCard.astro';
 <script>
   import ApexCharts from 'apexcharts';
 
-  const months = ['Kwi 25', 'Maj 25', 'Cze 25', 'Lip 25', 'Sie 25', 'Wrz 25', 'Paź 25', 'Lis 25', 'Gru 25', 'Sty 26', 'Lut 26', 'Mar 26'];
-  const punctualityData = [78.4, 80.1, 82.3, 83.7, 81.2, 79.5, 76.8, 74.1, 71.3, 68.2, 70.5, 73.2];
+  const d = (window as any).__punktCharts;
+  const months = d.lineMonths;
+  const punctualityData = d.lineValues;
 
   const lineOptions: ApexCharts.ApexOptions = {
     chart: {
@@ -370,17 +468,6 @@ import StatCard from '../components/StatCard.astro';
           },
         },
       ],
-      xaxis: [
-        {
-          x: 'Sty 26',
-          borderColor: '#dc2626',
-          strokeDashArray: 4,
-          label: {
-            text: 'Zima',
-            style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: '#dc2626', background: 'transparent', borderColor: 'transparent' },
-          },
-        },
-      ],
     },
   };
 
@@ -392,10 +479,11 @@ import StatCard from '../components/StatCard.astro';
 <script>
   import ApexCharts from 'apexcharts';
 
-  const operators = ['SKM Trójmiasto', 'PolRegio', 'Koleje Mazowieckie', 'PKP Intercity'];
-  const operatorPunctuality = [85, 81, 78, 73];
+  const d = (window as any).__punktCharts;
+  const operators = d.opNames;
+  const operatorPunctuality = d.opValues;
 
-  const operatorColors = operatorPunctuality.map(val =>
+  const operatorColors = operatorPunctuality.map((val: number) =>
     val >= 80 ? '#16a34a' : val >= 70 ? '#d97706' : '#dc2626'
   );
 
@@ -462,10 +550,11 @@ import StatCard from '../components/StatCard.astro';
 <script>
   import ApexCharts from 'apexcharts';
 
-  const categories = ['EIP', 'EIC', 'IC', 'TLK'];
-  const categoryPunctuality = [82, 76, 71, 68];
+  const d = (window as any).__punktCharts;
+  const categories = d.catNames;
+  const categoryPunctuality = d.catValues;
 
-  const categoryColors = categoryPunctuality.map(val =>
+  const categoryColors = categoryPunctuality.map((val: number) =>
     val >= 80 ? '#16a34a' : val >= 70 ? '#d97706' : '#dc2626'
   );
 

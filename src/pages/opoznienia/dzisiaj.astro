@@ -1,6 +1,22 @@
 ---
+export const prerender = false;
+
 import Base from '../../layouts/Base.astro';
 import StatCard from '../../components/StatCard.astro';
+import { fetchTodayDelays, EMPTY_TODAY } from '../../lib/fetch-data';
+
+const data = await fetchTodayDelays() ?? EMPTY_TODAY;
+const hasData = data.stats.totalTrains > 0;
+
+// Format helpers
+const fmtNumber = (n: number) => n.toLocaleString('pl-PL');
+const fmtDelay = (n: number) => n.toFixed(1).replace('.', ',') + ' min';
+const fmtPct = (n: number) => n.toFixed(1).replace('.', ',') + '%';
+
+// Timestamp
+const now = new Date();
+const updateTime = now.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  + ', ' + now.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
 ---
 <Base
   title="Opóźnienia pociągów dzisiaj — na żywo"
@@ -35,17 +51,17 @@ import StatCard from '../../components/StatCard.astro';
       Aktualne opóźnienia wszystkich pociągów w Polsce. Dane z PKP PLK odświeżane co 2 minuty.
     </p>
     <p class="font-ticket text-[0.625rem] text-ink-faint tracking-wider uppercase">
-      Ostatnia aktualizacja: 26.03.2026, 14:32 &middot; Źródło: PKP PLK Otwarte Dane Kolejowe
+      Ostatnia aktualizacja: {updateTime} &middot; Źródło: PKP PLK Otwarte Dane Kolejowe
     </p>
   </section>
 
   <!-- Stats row -->
   <section class="max-w-5xl mx-auto px-5 py-6 fade-up">
     <div class="grid grid-cols-2 md:grid-cols-4 gap-3 stagger">
-      <StatCard value="1 847" label="Pociągów dzisiaj" color="default" trend="up" trendValue="+3% vs wt." />
-      <StatCard value="73,2%" label="Punktualność" color="warn" trend="down" trendValue="-2,1pp" />
-      <StatCard value="8,4 min" label="Średnie opóźnienie" color="brand" trend="up" trendValue="+1,2 min" />
-      <StatCard value="12" label="Odwołanych" color="danger" />
+      <StatCard value={hasData ? fmtNumber(data.stats.totalTrains) : '—'} label="Pociągów dzisiaj" color="default" />
+      <StatCard value={hasData ? fmtPct(data.stats.punctuality) : '—'} label="Punktualność" color={data.stats.punctuality >= 80 ? 'safe' : data.stats.punctuality >= 60 ? 'warn' : 'danger'} />
+      <StatCard value={hasData ? fmtDelay(data.stats.avgDelay) : '—'} label="Średnie opóźnienie" color="brand" />
+      <StatCard value={hasData ? String(data.stats.cancelled) : '—'} label="Odwołanych" color="danger" />
     </div>
   </section>
 
@@ -59,7 +75,14 @@ import StatCard from '../../components/StatCard.astro';
         </div>
         <span class="font-ticket text-[0.625rem] text-ink-faint tracking-wider uppercase">Śr. opóźnienie (min)</span>
       </div>
-      <div id="delay-area-chart" style="min-height: 280px;"></div>
+      {hasData ? (
+        <div id="delay-area-chart" style="min-height: 280px;"></div>
+      ) : (
+        <div class="bg-surface-sunken rounded-xl p-8 text-center">
+          <p class="font-ticket text-ink-faint text-sm">// brak danych</p>
+          <p class="text-ink-muted text-sm mt-2">Dane pojawią się wkrótce. System zbiera informacje o opóźnieniach.</p>
+        </div>
+      )}
     </div>
   </section>
 
@@ -70,14 +93,28 @@ import StatCard from '../../components/StatCard.astro';
       <div class="md:col-span-3 bg-surface-raised rounded-2xl border border-border p-5 md:p-7">
         <p class="section-label mb-1.5">// ranking opóźnień</p>
         <h2 class="text-lg font-bold text-ink tracking-tight mb-6">Najbardziej opóźnione pociągi</h2>
-        <div id="delayed-trains-chart" style="min-height: 340px;"></div>
+        {hasData && data.topDelayed.length > 0 ? (
+          <div id="delayed-trains-chart" style="min-height: 340px;"></div>
+        ) : (
+          <div class="bg-surface-sunken rounded-xl p-8 text-center">
+            <p class="font-ticket text-ink-faint text-sm">// brak danych</p>
+            <p class="text-ink-muted text-sm mt-2">Dane pojawią się wkrótce. System zbiera informacje o opóźnieniach.</p>
+          </div>
+        )}
       </div>
 
       <!-- Radial gauge — punctuality -->
       <div class="md:col-span-2 bg-surface-raised rounded-2xl border border-border p-5 md:p-7 flex flex-col items-center justify-center">
         <p class="section-label mb-1.5">// punktualność sieci</p>
         <h2 class="text-lg font-bold text-ink tracking-tight mb-4">Punktualność sieci</h2>
-        <div id="punctuality-gauge" style="min-height: 240px; width: 100%;"></div>
+        {hasData ? (
+          <div id="punctuality-gauge" style="min-height: 240px; width: 100%;"></div>
+        ) : (
+          <div class="bg-surface-sunken rounded-xl p-8 text-center">
+            <p class="font-ticket text-ink-faint text-sm">// brak danych</p>
+            <p class="text-ink-muted text-sm mt-2">Dane pojawią się wkrótce. System zbiera informacje o opóźnieniach.</p>
+          </div>
+        )}
         <p class="font-ticket text-[0.625rem] text-ink-faint tracking-wider text-center mt-2">
           &lt;60% — <span class="text-delay-danger">KRYTYCZNIE</span> &middot;
           60-80% — <span class="text-delay-warn">SŁABO</span> &middot;
@@ -91,108 +128,55 @@ import StatCard from '../../components/StatCard.astro';
   <section class="max-w-5xl mx-auto px-5 py-8 fade-up">
     <p class="section-label mb-1.5">// ostatnie opóźnienia</p>
     <h2 class="text-lg font-bold text-ink tracking-tight mb-6">Na żywo</h2>
-    <div class="space-y-3 stagger">
-
-      <div class="ticket-card rounded-xl p-4 fade-up">
-        <div class="flex flex-wrap items-center gap-3">
-          <span class="font-ticket font-semibold text-[0.875rem] text-ink">IC 5313</span>
-          <span class="badge badge-danger">+47 min</span>
-          <span class="text-[0.8125rem] text-ink-muted">Kraków Gł. &rarr; Warszawa Wsch.</span>
-          <span class="ml-auto font-ticket text-[0.6875rem] text-ink-faint">Ostatnia: Kielce</span>
-        </div>
+    {hasData && data.topDelayed.length > 0 ? (
+      <div class="space-y-3 stagger">
+        {data.topDelayed.map((train) => (
+          <div class="ticket-card rounded-xl p-4 fade-up">
+            <div class="flex flex-wrap items-center gap-3">
+              <span class="font-ticket font-semibold text-[0.875rem] text-ink">{train.trainNumber}</span>
+              <span class={`badge ${train.delay >= 30 ? 'badge-danger' : 'badge-warn'}`}>+{train.delay} min</span>
+              {train.route && <span class="text-[0.8125rem] text-ink-muted">{train.route}</span>}
+              {train.station && <span class="ml-auto font-ticket text-[0.6875rem] text-ink-faint">Ostatnia: {train.station}</span>}
+            </div>
+          </div>
+        ))}
       </div>
-
-      <div class="ticket-card rounded-xl p-4 fade-up">
-        <div class="flex flex-wrap items-center gap-3">
-          <span class="font-ticket font-semibold text-[0.875rem] text-ink">TLK 3201</span>
-          <span class="badge badge-danger">+38 min</span>
-          <span class="text-[0.8125rem] text-ink-muted">Wrocław Gł. &rarr; Gdańsk Gł.</span>
-          <span class="ml-auto font-ticket text-[0.6875rem] text-ink-faint">Ostatnia: Poznań Gł.</span>
-        </div>
+    ) : (
+      <div class="bg-surface-sunken rounded-xl p-8 text-center">
+        <p class="font-ticket text-ink-faint text-sm">// brak danych</p>
+        <p class="text-ink-muted text-sm mt-2">Dane pojawią się wkrótce. System zbiera informacje o opóźnieniach.</p>
       </div>
-
-      <div class="ticket-card rounded-xl p-4 fade-up">
-        <div class="flex flex-wrap items-center gap-3">
-          <span class="font-ticket font-semibold text-[0.875rem] text-ink">EIC 1704</span>
-          <span class="badge badge-danger">+31 min</span>
-          <span class="text-[0.8125rem] text-ink-muted">Warszawa Centralna &rarr; Katowice</span>
-          <span class="ml-auto font-ticket text-[0.6875rem] text-ink-faint">Ostatnia: Częstochowa</span>
-        </div>
-      </div>
-
-      <div class="ticket-card rounded-xl p-4 fade-up">
-        <div class="flex flex-wrap items-center gap-3">
-          <span class="font-ticket font-semibold text-[0.875rem] text-ink">IC 6102</span>
-          <span class="badge badge-warn">+22 min</span>
-          <span class="text-[0.8125rem] text-ink-muted">Szczecin Gł. &rarr; Warszawa Wsch.</span>
-          <span class="ml-auto font-ticket text-[0.6875rem] text-ink-faint">Ostatnia: Krzyż</span>
-        </div>
-      </div>
-
-      <div class="ticket-card rounded-xl p-4 fade-up">
-        <div class="flex flex-wrap items-center gap-3">
-          <span class="font-ticket font-semibold text-[0.875rem] text-ink">EIP 3501</span>
-          <span class="badge badge-warn">+14 min</span>
-          <span class="text-[0.8125rem] text-ink-muted">Gdańsk Gł. &rarr; Kraków Gł.</span>
-          <span class="ml-auto font-ticket text-[0.6875rem] text-ink-faint">Ostatnia: Warszawa C.</span>
-        </div>
-      </div>
-
-      <div class="ticket-card rounded-xl p-4 fade-up">
-        <div class="flex flex-wrap items-center gap-3">
-          <span class="font-ticket font-semibold text-[0.875rem] text-ink">IC 8301</span>
-          <span class="badge badge-warn">+11 min</span>
-          <span class="text-[0.8125rem] text-ink-muted">Łódź Fabryczna &rarr; Poznań Gł.</span>
-          <span class="ml-auto font-ticket text-[0.6875rem] text-ink-faint">Ostatnia: Kutno</span>
-        </div>
-      </div>
-
-    </div>
+    )}
   </section>
 
   <!-- Disruptions -->
   <section class="max-w-5xl mx-auto px-5 py-8 fade-up">
     <p class="section-label mb-1.5">// utrudnienia</p>
     <h2 class="text-lg font-bold text-ink tracking-tight mb-6">Aktualne utrudnienia</h2>
-    <div class="space-y-4">
-
-      <div class="bg-surface-raised rounded-2xl border border-border p-5">
-        <div class="flex items-start gap-3">
-          <span class="badge badge-danger shrink-0 mt-0.5">ZAMKNIĘCIE</span>
-          <div>
-            <p class="font-semibold text-[0.9375rem] text-ink mb-1">Warszawa Centralna &mdash; Warszawa Zachodnia</p>
-            <p class="text-[0.8125rem] text-ink-muted leading-relaxed">
-              Prace torowe na odcinku Warszawa Centralna &mdash; Warszawa Zachodnia. Pociągi kierowane przez Warszawa Gdańska z opóźnieniem ok. 15-25 min. Planowane zakończenie: 28.03.2026.
-            </p>
+    {data.disruptions.length > 0 ? (
+      <div class="space-y-4">
+        {data.disruptions.map((d: any) => (
+          <div class="bg-surface-raised rounded-2xl border border-border p-5">
+            <div class="flex items-start gap-3">
+              <span class="badge badge-warn shrink-0 mt-0.5">UTRUDNIENIE</span>
+              <div>
+                {(d.startStation || d.endStation || d.route) && (
+                  <p class="font-semibold text-[0.9375rem] text-ink mb-1">
+                    {d.startStation && d.endStation ? `${d.startStation} — ${d.endStation}` : (d.route || '')}
+                  </p>
+                )}
+                <p class="text-[0.8125rem] text-ink-muted leading-relaxed">{d.message}</p>
+              </div>
+            </div>
           </div>
-        </div>
+        ))}
       </div>
-
-      <div class="bg-surface-raised rounded-2xl border border-border p-5">
-        <div class="flex items-start gap-3">
-          <span class="badge badge-warn shrink-0 mt-0.5">OGRANICZENIE</span>
-          <div>
-            <p class="font-semibold text-[0.9375rem] text-ink mb-1">Kraków Gł. &mdash; Katowice</p>
-            <p class="text-[0.8125rem] text-ink-muted leading-relaxed">
-              Ograniczenie prędkości do 40 km/h na odcinku Trzebinia &mdash; Jaworzno. Opóźnienia do 20 min na pociągach IC i TLK. Szacowany czas trwania: do 15.04.2026.
-            </p>
-          </div>
-        </div>
+    ) : (
+      <div class="bg-surface-sunken rounded-xl p-8 text-center">
+        <p class="font-ticket text-ink-faint text-sm">// brak utrudnień</p>
+        <p class="text-ink-muted text-sm mt-2">Aktualnie brak zgłoszonych utrudnień w ruchu kolejowym.</p>
       </div>
-
-      <div class="bg-surface-raised rounded-2xl border border-border p-5">
-        <div class="flex items-start gap-3">
-          <span class="badge badge-warn shrink-0 mt-0.5">ZASTĘPCZA</span>
-          <div>
-            <p class="font-semibold text-[0.9375rem] text-ink mb-1">Lublin &mdash; Rzeszów</p>
-            <p class="text-[0.8125rem] text-ink-muted leading-relaxed">
-              Zastępcza komunikacja autobusowa na odcinku Stalowa Wola &mdash; Rzeszów. Dotyczy pociągów TLK na trasie Lublin &mdash; Rzeszów Gł.
-            </p>
-          </div>
-        </div>
-      </div>
-
-    </div>
+    )}
   </section>
 
   <!-- CTA -->
@@ -226,181 +210,203 @@ import StatCard from '../../components/StatCard.astro';
 
 </Base>
 
+<!-- Pass SSR data to browser for charts -->
+<script define:vars={{
+  areaHours: data.hourlyDelays.map(h => h.hour),
+  areaDelays: data.hourlyDelays.map(h => h.avgDelay),
+  barLabels: data.topDelayed.map(t => t.trainNumber),
+  barDelays: data.topDelayed.map(t => t.delay),
+  gaugePunctuality: data.stats.punctuality,
+  chartHasData: hasData,
+}}>
+  window.__dzisiajCharts = {
+    areaHours, areaDelays,
+    barLabels, barDelays,
+    gaugePunctuality,
+    chartHasData,
+  };
+</script>
+
 <!-- Area chart: delays over hours -->
 <script>
   import ApexCharts from 'apexcharts';
 
-  const hours = ['06:00','07:00','08:00','09:00','10:00','11:00','12:00','13:00','14:00','15:00','16:00','17:00','18:00','19:00','20:00','21:00','22:00'];
-  const delays = [3.2, 8.7, 14.3, 12.8, 5.4, 4.1, 3.8, 5.2, 6.1, 9.8, 12.1, 10.4, 7.3, 5.1, 4.2, 3.5, 3.1];
-
-  const areaOptions: ApexCharts.ApexOptions = {
-    chart: {
-      type: 'area',
-      height: 280,
-      fontFamily: 'Outfit, system-ui, sans-serif',
-      background: 'transparent',
-      toolbar: { show: false },
-      zoom: { enabled: false },
-      animations: { enabled: true, easing: 'easeinout', speed: 600, animateGradually: { enabled: true, delay: 80 } },
-    },
-    series: [{ name: 'Śr. opóźnienie', data: delays }],
-    colors: ['#c2410c'],
-    fill: {
-      type: 'gradient',
-      gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.05, stops: [0, 90, 100] },
-    },
-    stroke: { curve: 'smooth', width: 2.5, lineCap: 'round' },
-    grid: {
-      borderColor: '#e7e5e0',
-      strokeDashArray: 4,
-      padding: { left: 8, right: 8 },
-      xaxis: { lines: { show: false } },
-      yaxis: { lines: { show: true } },
-    },
-    xaxis: {
-      categories: hours,
-      labels: { style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', colors: '#a8a29e' } },
-      axisBorder: { show: true, color: '#e7e5e0' },
-      axisTicks: { show: false },
-      crosshairs: { stroke: { color: '#c2410c', width: 1, dashArray: 4 } },
-    },
-    yaxis: {
-      labels: {
-        style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', colors: '#a8a29e' },
-        formatter: (val: number) => val.toFixed(0) + ' min',
+  const d = (window as any).__dzisiajCharts;
+  if (d?.chartHasData && d.areaHours.length > 0 && document.querySelector('#delay-area-chart')) {
+    const areaOptions: ApexCharts.ApexOptions = {
+      chart: {
+        type: 'area',
+        height: 280,
+        fontFamily: 'Outfit, system-ui, sans-serif',
+        background: 'transparent',
+        toolbar: { show: false },
+        zoom: { enabled: false },
+        animations: { enabled: true, easing: 'easeinout', speed: 600, animateGradually: { enabled: true, delay: 80 } },
       },
-    },
-    tooltip: {
-      theme: 'light',
-      style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '11px' },
-      y: { formatter: (val: number) => val.toFixed(1) + ' min' },
-      marker: { show: true },
-    },
-    dataLabels: { enabled: false },
-    annotations: {
-      xaxis: [
-        { x: '07:00', x2: '09:00', fillColor: '#c2410c', opacity: 0.06, label: { text: 'Szczyt poranny', style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: '#a8a29e' } } },
-        { x: '15:00', x2: '17:00', fillColor: '#c2410c', opacity: 0.06, label: { text: 'Szczyt popołudniowy', style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: '#a8a29e' } } },
-      ],
-    },
-  };
+      series: [{ name: 'Śr. opóźnienie', data: d.areaDelays }],
+      colors: ['#c2410c'],
+      fill: {
+        type: 'gradient',
+        gradient: { shadeIntensity: 1, opacityFrom: 0.4, opacityTo: 0.05, stops: [0, 90, 100] },
+      },
+      stroke: { curve: 'smooth', width: 2.5, lineCap: 'round' },
+      grid: {
+        borderColor: '#e7e5e0',
+        strokeDashArray: 4,
+        padding: { left: 8, right: 8 },
+        xaxis: { lines: { show: false } },
+        yaxis: { lines: { show: true } },
+      },
+      xaxis: {
+        categories: d.areaHours,
+        labels: { style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', colors: '#a8a29e' } },
+        axisBorder: { show: true, color: '#e7e5e0' },
+        axisTicks: { show: false },
+        crosshairs: { stroke: { color: '#c2410c', width: 1, dashArray: 4 } },
+      },
+      yaxis: {
+        labels: {
+          style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', colors: '#a8a29e' },
+          formatter: (val: number) => val.toFixed(0) + ' min',
+        },
+      },
+      tooltip: {
+        theme: 'light',
+        style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '11px' },
+        y: { formatter: (val: number) => val.toFixed(1) + ' min' },
+        marker: { show: true },
+      },
+      dataLabels: { enabled: false },
+      annotations: {
+        xaxis: [
+          { x: '07:00', x2: '09:00', fillColor: '#c2410c', opacity: 0.06, label: { text: 'Szczyt poranny', style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: '#a8a29e' } } },
+          { x: '15:00', x2: '17:00', fillColor: '#c2410c', opacity: 0.06, label: { text: 'Szczyt popołudniowy', style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '9px', color: '#a8a29e' } } },
+        ],
+      },
+    };
 
-  const areaChart = new ApexCharts(document.querySelector('#delay-area-chart'), areaOptions);
-  areaChart.render();
+    const areaChart = new ApexCharts(document.querySelector('#delay-area-chart'), areaOptions);
+    areaChart.render();
+  }
 </script>
 
 <!-- Horizontal bar chart: most delayed trains -->
 <script>
   import ApexCharts from 'apexcharts';
 
-  const barOptions: ApexCharts.ApexOptions = {
-    chart: {
-      type: 'bar',
-      height: 340,
-      fontFamily: 'Outfit, system-ui, sans-serif',
-      background: 'transparent',
-      toolbar: { show: false },
-      animations: { enabled: true, easing: 'easeinout', speed: 600, animateGradually: { enabled: true, delay: 80 } },
-    },
-    plotOptions: {
-      bar: { horizontal: true, borderRadius: 4, barHeight: '65%' },
-    },
-    series: [{ name: 'Opóźnienie', data: [47, 38, 31, 27, 24, 22, 18, 14] }],
-    colors: ['#c2410c'],
-    fill: { type: 'solid', opacity: 0.9 },
-    stroke: { width: 0 },
-    xaxis: {
-      labels: {
-        style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', colors: '#a8a29e' },
-        formatter: (val: string) => val + ' min',
+  const d = (window as any).__dzisiajCharts;
+  if (d?.chartHasData && d.barLabels.length > 0 && document.querySelector('#delayed-trains-chart')) {
+    const barOptions: ApexCharts.ApexOptions = {
+      chart: {
+        type: 'bar',
+        height: 340,
+        fontFamily: 'Outfit, system-ui, sans-serif',
+        background: 'transparent',
+        toolbar: { show: false },
+        animations: { enabled: true, easing: 'easeinout', speed: 600, animateGradually: { enabled: true, delay: 80 } },
       },
-      axisBorder: { show: true, color: '#e7e5e0' },
-      axisTicks: { show: false },
-    },
-    yaxis: {
-      labels: { style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', colors: '#1c1917' } },
-    },
-    grid: {
-      borderColor: '#e7e5e0',
-      strokeDashArray: 4,
-      padding: { left: 8, right: 8 },
-      xaxis: { lines: { show: true } },
-      yaxis: { lines: { show: false } },
-    },
-    categories: ['IC 5313', 'TLK 3201', 'EIC 1704', 'IC 6102', 'TLK 1505', 'IC 4302', 'EIP 3501', 'IC 8301'],
-    labels: ['IC 5313', 'TLK 3201', 'EIC 1704', 'IC 6102', 'TLK 1505', 'IC 4302', 'EIP 3501', 'IC 8301'],
-    tooltip: {
-      theme: 'light',
-      style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '11px' },
-      y: { formatter: (val: number) => '+' + val + ' min' },
-    },
-    dataLabels: {
-      enabled: true,
-      formatter: (val: number) => '+' + val + ' min',
-      style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', colors: ['#fff'] },
-      offsetX: -4,
-    },
-    states: {
-      hover: { filter: { type: 'darken', value: 0.05 } },
-      active: { filter: { type: 'darken', value: 0.1 } },
-    },
-  };
+      plotOptions: {
+        bar: { horizontal: true, borderRadius: 4, barHeight: '65%' },
+      },
+      series: [{ name: 'Opóźnienie', data: d.barDelays }],
+      colors: ['#c2410c'],
+      fill: { type: 'solid', opacity: 0.9 },
+      stroke: { width: 0 },
+      xaxis: {
+        labels: {
+          style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', colors: '#a8a29e' },
+          formatter: (val: string) => val + ' min',
+        },
+        axisBorder: { show: true, color: '#e7e5e0' },
+        axisTicks: { show: false },
+      },
+      yaxis: {
+        labels: { style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', colors: '#1c1917' } },
+      },
+      grid: {
+        borderColor: '#e7e5e0',
+        strokeDashArray: 4,
+        padding: { left: 8, right: 8 },
+        xaxis: { lines: { show: true } },
+        yaxis: { lines: { show: false } },
+      },
+      labels: d.barLabels,
+      tooltip: {
+        theme: 'light',
+        style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '11px' },
+        y: { formatter: (val: number) => '+' + val + ' min' },
+      },
+      dataLabels: {
+        enabled: true,
+        formatter: (val: number) => '+' + val + ' min',
+        style: { fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', colors: ['#fff'] },
+        offsetX: -4,
+      },
+      states: {
+        hover: { filter: { type: 'darken', value: 0.05 } },
+        active: { filter: { type: 'darken', value: 0.1 } },
+      },
+    };
 
-  const barChart = new ApexCharts(document.querySelector('#delayed-trains-chart'), barOptions);
-  barChart.render();
+    const barChart = new ApexCharts(document.querySelector('#delayed-trains-chart'), barOptions);
+    barChart.render();
+  }
 </script>
 
 <!-- Radial gauge: punctuality -->
 <script>
   import ApexCharts from 'apexcharts';
 
-  const punctuality = 73.2;
-  const gaugeColor = punctuality >= 80 ? '#16a34a' : punctuality >= 60 ? '#d97706' : '#dc2626';
+  const d = (window as any).__dzisiajCharts;
+  if (d?.chartHasData && document.querySelector('#punctuality-gauge')) {
+    const punctuality = d.gaugePunctuality;
+    const gaugeColor = punctuality >= 80 ? '#16a34a' : punctuality >= 60 ? '#d97706' : '#dc2626';
 
-  const gaugeOptions: ApexCharts.ApexOptions = {
-    chart: {
-      type: 'radialBar',
-      height: 240,
-      fontFamily: 'Outfit, system-ui, sans-serif',
-      background: 'transparent',
-      animations: { enabled: true, easing: 'easeinout', speed: 600 },
-    },
-    series: [punctuality],
-    colors: [gaugeColor],
-    plotOptions: {
-      radialBar: {
-        startAngle: -135,
-        endAngle: 135,
-        hollow: { size: '65%', background: 'transparent' },
-        track: { background: '#e7e5e0', strokeWidth: '100%', margin: 0 },
-        dataLabels: {
-          name: {
-            show: true,
-            fontSize: '11px',
-            fontFamily: 'JetBrains Mono, monospace',
-            color: '#a8a29e',
-            offsetY: 20,
-          },
-          value: {
-            show: true,
-            fontSize: '28px',
-            fontFamily: 'Outfit, system-ui, sans-serif',
-            fontWeight: '800',
-            color: '#1c1917',
-            offsetY: -16,
-            formatter: (val: number) => val.toFixed(1) + '%',
+    const gaugeOptions: ApexCharts.ApexOptions = {
+      chart: {
+        type: 'radialBar',
+        height: 240,
+        fontFamily: 'Outfit, system-ui, sans-serif',
+        background: 'transparent',
+        animations: { enabled: true, easing: 'easeinout', speed: 600 },
+      },
+      series: [punctuality],
+      colors: [gaugeColor],
+      plotOptions: {
+        radialBar: {
+          startAngle: -135,
+          endAngle: 135,
+          hollow: { size: '65%', background: 'transparent' },
+          track: { background: '#e7e5e0', strokeWidth: '100%', margin: 0 },
+          dataLabels: {
+            name: {
+              show: true,
+              fontSize: '11px',
+              fontFamily: 'JetBrains Mono, monospace',
+              color: '#a8a29e',
+              offsetY: 20,
+            },
+            value: {
+              show: true,
+              fontSize: '28px',
+              fontFamily: 'Outfit, system-ui, sans-serif',
+              fontWeight: '800',
+              color: '#1c1917',
+              offsetY: -16,
+              formatter: (val: number) => val.toFixed(1) + '%',
+            },
           },
         },
       },
-    },
-    labels: ['PUNKTUALNOŚĆ'],
-    stroke: { lineCap: 'round' },
-    states: {
-      hover: { filter: { type: 'none' } },
-      active: { filter: { type: 'none' } },
-    },
-  };
+      labels: ['PUNKTUALNOŚĆ'],
+      stroke: { lineCap: 'round' },
+      states: {
+        hover: { filter: { type: 'none' } },
+        active: { filter: { type: 'none' } },
+      },
+    };
 
-  const gaugeChart = new ApexCharts(document.querySelector('#punctuality-gauge'), gaugeOptions);
-  gaugeChart.render();
+    const gaugeChart = new ApexCharts(document.querySelector('#punctuality-gauge'), gaugeOptions);
+    gaugeChart.render();
+  }
 </script>

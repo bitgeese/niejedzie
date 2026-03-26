@@ -1,22 +1,46 @@
 ---
 import Base from '../../layouts/Base.astro';
 import StatCard from '../../components/StatCard.astro';
+import { fetchCityData, fetchDisruptions, EMPTY_CITY } from '../../lib/fetch-data';
 
-const city = 'Wrocław';
-const station = 'Wrocław Główny';
-const slug = 'wroclaw';
-const trainsToday = 198;
-const avgDelay = 13;
-const punctuality = 70.1;
+const CITY_SLUG = 'wroclaw';
+const CITY_NAME = 'Wrocław';
+const STATION_NAME = 'Wrocław Główny';
 
-const topTrains = [
+const city = CITY_NAME;
+const station = STATION_NAME;
+const slug = CITY_SLUG;
+
+// Fetch live data
+const cityData = await fetchCityData(CITY_SLUG) ?? EMPTY_CITY;
+const liveDisruptions = await fetchDisruptions() ?? [];
+const hasData = cityData.today.trainCount > 0;
+
+// Use live stats or fallback
+const trainsToday = hasData ? cityData.today.trainCount : 198;
+const avgDelay = hasData ? cityData.today.avgDelay : 13;
+const punctuality = hasData ? cityData.today.punctuality : 70.1;
+
+// Live top delayed trains from API
+const liveTopTrains = cityData.topDelayed.map(t => ({
+  number: t.trainNumber,
+  route: t.route,
+  avgDelay: t.delay,
+  station: t.station,
+}));
+
+// Mock fallback for top trains
+const mockTopTrains = [
   { number: 'IC 6103', route: 'Kraków Gł. → Wrocław Gł.', avgDelay: 16, punctuality: 64 },
   { number: 'EIC 1300', route: 'Warszawa C. → Wrocław Gł.', avgDelay: 13, punctuality: 69 },
   { number: 'TLK 53100', route: 'Gdańsk Gł. → Wrocław Gł.', avgDelay: 21, punctuality: 55 },
   { number: 'IC 7200', route: 'Wrocław Gł. → Poznań Gł.', avgDelay: 10, punctuality: 75 },
   { number: 'R 76401', route: 'Wrocław Gł. → Jelenia Góra', avgDelay: 14, punctuality: 66 },
 ];
+const topTrains = liveTopTrains.length > 0 ? liveTopTrains : mockTopTrains;
+const hasLiveTrains = liveTopTrains.length > 0;
 
+// Mock data for sparklines (keep until we have 7+ days of history)
 const sparklineTrains = [
   { number: 'IC 6103', data: [10, 16, 12, 20, 14, 8, 16] },
   { number: 'EIC 1300', data: [6, 10, 13, 8, 14, 10, 9] },
@@ -26,10 +50,18 @@ const sparklineTrains = [
   { number: 'IC 3500', data: [5, 9, 7, 13, 8, 4, 10] },
 ];
 
-const disruptions = [
+// Live disruptions mapped to display format, with mock fallback
+const mockDisruptions = [
   { title: 'Prace torowe Wrocław Mikołajów', desc: 'Ograniczenie prędkości na wjeździe do stacji Wrocław Główny od strony zachodniej. Opóźnienia do 8 min.', severity: 'warn' },
   { title: 'Zamknięcie toru Wrocław–Oława', desc: 'Ruch wahadłowy na odcinku Wrocław Brochów–Oława. Pociągi regionalne mogą mieć opóźnienia do 15 min.', severity: 'danger' },
 ];
+const disruptions = liveDisruptions.length > 0
+  ? liveDisruptions.map(d => ({
+      title: `${d.startStation} — ${d.endStation}`,
+      desc: d.message,
+      severity: d.typeCode === 'disruption' ? 'danger' : 'warn',
+    }))
+  : mockDisruptions;
 
 function punctualityBadge(p: number) {
   if (p >= 75) return 'safe';
@@ -96,33 +128,42 @@ function punctualityBadge(p: number) {
   <!-- Top delayed trains -->
   <section class="max-w-5xl mx-auto px-5 pb-12 fade-up">
     <p class="section-label mb-4">// najczęściej opóźniane</p>
-    <h2 class="text-[1.25rem] font-bold text-ink tracking-tight mb-6">Top 5 opóźnionych pociągów</h2>
-    <div class="space-y-3">
-      {topTrains.map((train, i) => (
-        <div class="ticket-card rounded-xl overflow-hidden">
-          <div class="p-4 flex items-center justify-between gap-4">
-            <div class="flex items-center gap-4 min-w-0">
-              <span class="font-ticket text-[0.6875rem] font-semibold text-ink-faint w-5 shrink-0">#{i + 1}</span>
-              <div class="min-w-0">
-                <div class="flex items-center gap-2 mb-0.5">
-                  <span class="font-ticket font-semibold text-[0.875rem] text-ink">{train.number}</span>
+    <h2 class="text-[1.25rem] font-bold text-ink tracking-tight mb-6">Top opóźnionych pociągów</h2>
+    {hasLiveTrains && topTrains.length === 0 ? (
+      <div class="bg-surface-sunken rounded-xl p-6 text-center">
+        <p class="font-ticket text-ink-faint text-sm">// brak opóźnień</p>
+        <p class="text-ink-muted text-sm mt-2">Aktualnie brak opóźnionych pociągów w {CITY_NAME}.</p>
+      </div>
+    ) : (
+      <div class="space-y-3">
+        {topTrains.map((train, i) => (
+          <div class="ticket-card rounded-xl overflow-hidden">
+            <div class="p-4 flex items-center justify-between gap-4">
+              <div class="flex items-center gap-4 min-w-0">
+                <span class="font-ticket text-[0.6875rem] font-semibold text-ink-faint w-5 shrink-0">#{i + 1}</span>
+                <div class="min-w-0">
+                  <div class="flex items-center gap-2 mb-0.5">
+                    <span class="font-ticket font-semibold text-[0.875rem] text-ink">{train.number}</span>
+                  </div>
+                  <p class="text-[0.75rem] text-ink-muted truncate">{train.route}</p>
                 </div>
-                <p class="text-[0.75rem] text-ink-muted truncate">{train.route}</p>
               </div>
-            </div>
-            <div class="flex items-center gap-3 shrink-0">
-              <div class="text-right">
-                <span class="font-ticket font-semibold text-[0.875rem] text-ink">+{train.avgDelay} min</span>
-                <p class="font-ticket text-[0.6rem] text-ink-faint tracking-wider uppercase">Śr. opóźn.</p>
+              <div class="flex items-center gap-3 shrink-0">
+                <div class="text-right">
+                  <span class="font-ticket font-semibold text-[0.875rem] text-ink">+{train.avgDelay} min</span>
+                  <p class="font-ticket text-[0.6rem] text-ink-faint tracking-wider uppercase">{hasLiveTrains ? 'Opóźnienie' : 'Śr. opóźn.'}</p>
+                </div>
+                {!hasLiveTrains && train.punctuality && (
+                  <span class={`badge badge-${punctualityBadge(train.punctuality)}`}>
+                    {train.punctuality}%
+                  </span>
+                )}
               </div>
-              <span class={`badge badge-${punctualityBadge(train.punctuality)}`}>
-                {train.punctuality}%
-              </span>
             </div>
           </div>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+    )}
   </section>
 
   <!-- Sparkline grid -->
