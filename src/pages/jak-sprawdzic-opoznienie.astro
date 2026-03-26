@@ -1,0 +1,726 @@
+---
+import Base from '../layouts/Base.astro';
+
+const faqSchema = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "Jak sprawdzić opóźnienie pociągu IC?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Najszybciej przez Portal Pasażera (portalpasazera.pl) — wpisz numer pociągu lub stację i zobaczysz aktualne opóźnienie w minutach. Możesz też skorzystać z aplikacji KOLEO lub aplikacji PKP Intercity."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Gdzie sprawdzić opóźnienia pociągów online?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Opóźnienia pociągów sprawdzisz online na: Portal Pasażera (portalpasazera.pl), w aplikacji KOLEO, w aplikacji PKP Intercity, na rozklad-pkp.pl oraz na niejedzie.pl — który dodatkowo monitoruje przesiadki."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Czy mogę dostać odszkodowanie za opóźniony pociąg?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Tak. Przy opóźnieniu 60-119 minut przysługuje zwrot 25% ceny biletu, a przy opóźnieniu 120+ minut — 50% ceny biletu. Dotyczy pociągów dalekobieżnych (EIP, EIC, IC, TLK). Reklamację składasz u przewoźnika w ciągu 3 miesięcy."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Co zrobić gdy przez opóźnienie nie zdążę na przesiadkę?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Jeśli opóźnienie pierwszego pociągu spowodowało utratę przesiadki, masz prawo jechać następnym pociągiem tego samego przewoźnika bez dopłaty. Zgłoś sytuację konduktorowi lub w kasie biletowej na stacji przesiadkowej."
+      }
+    }
+  ]
+};
+
+const howToSchema = {
+  "@context": "https://schema.org",
+  "@type": "HowTo",
+  "name": "Jak sprawdzić opóźnienie pociągu",
+  "description": "Poradnik krok po kroku: jak sprawdzić aktualne opóźnienie pociągu PKP online — przez Portal Pasażera, KOLEO, aplikację PKP IC i niejedzie.pl.",
+  "step": [
+    {
+      "@type": "HowToStep",
+      "name": "Wejdź na Portal Pasażera lub otwórz aplikację KOLEO",
+      "text": "Otwórz portalpasazera.pl w przeglądarce lub uruchom aplikację KOLEO na telefonie."
+    },
+    {
+      "@type": "HowToStep",
+      "name": "Wpisz numer pociągu lub nazwę stacji",
+      "text": "W wyszukiwarce wpisz numer pociągu (np. IC 5313) lub nazwę stacji, z której odjeżdżasz."
+    },
+    {
+      "@type": "HowToStep",
+      "name": "Sprawdź aktualne opóźnienie",
+      "text": "System pokaże planowy i rzeczywisty czas przyjazdu/odjazdu. Różnica to opóźnienie w minutach."
+    }
+  ]
+};
+---
+<Base
+  title="Jak sprawdzić opóźnienie pociągu — poradnik 2026"
+  description="Jak sprawdzić opóźnienie pociągu PKP? Poradnik krok po kroku: Portal Pasażera, KOLEO, aplikacja PKP IC, niejedzie.pl. Sprawdź gdzie jest Twój pociąg i czy się spóźnia."
+>
+
+  <!-- Schema.org: FAQ + HowTo -->
+  <script type="application/ld+json" set:html={JSON.stringify(faqSchema)} />
+  <script type="application/ld+json" set:html={JSON.stringify(howToSchema)} />
+
+  <!-- Hero -->
+  <section class="bg-stone-900 border-b border-stone-200">
+    <div class="max-w-4xl mx-auto px-4 pt-10 pb-12">
+      <div class="max-w-2xl mx-auto text-center">
+        <h1 class="text-2xl md:text-3xl font-bold text-white mb-3">
+          Jak sprawdzić <span class="text-orange-400">opóźnienie pociągu</span>?
+        </h1>
+        <p class="text-stone-300">
+          Kompletny poradnik — wszystkie sposoby na sprawdzenie czy Twój pociąg jedzie na czas. Portal Pasażera, KOLEO, aplikacja PKP IC i inne narzędzia.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Table of contents -->
+  <section class="max-w-4xl mx-auto px-4 py-8">
+    <div class="max-w-2xl mx-auto">
+      <div class="bg-white rounded-2xl border border-stone-200 p-5 md:p-6 shadow-sm">
+        <h2 class="text-sm font-semibold text-stone-400 uppercase tracking-wider mb-4">Spis treści</h2>
+        <nav>
+          <ol class="space-y-2 text-sm">
+            <li><a href="#portal-pasazera" class="text-orange-500 hover:text-orange-600 underline underline-offset-2">1. Portal Pasażera — najdokładniejsze dane</a></li>
+            <li><a href="#koleo" class="text-orange-500 hover:text-orange-600 underline underline-offset-2">2. KOLEO — opóźnienia przy kupowaniu biletów</a></li>
+            <li><a href="#aplikacja-pkp-ic" class="text-orange-500 hover:text-orange-600 underline underline-offset-2">3. Aplikacja PKP Intercity</a></li>
+            <li><a href="#rozklad-pkp" class="text-orange-500 hover:text-orange-600 underline underline-offset-2">4. Rozkład-PKP.pl — wyszukiwarka połączeń</a></li>
+            <li><a href="#niejedzie" class="text-orange-500 hover:text-orange-600 underline underline-offset-2">5. niejedzie.pl — monitoring przesiadek</a></li>
+            <li><a href="#inne-zrodla" class="text-orange-500 hover:text-orange-600 underline underline-offset-2">6. Inne źródła (tablice, media społecznościowe)</a></li>
+            <li><a href="#porownanie" class="text-orange-500 hover:text-orange-600 underline underline-offset-2">7. Porównanie narzędzi — które wybrać?</a></li>
+            <li><a href="#co-robic" class="text-orange-500 hover:text-orange-600 underline underline-offset-2">8. Co zrobić gdy pociąg jest opóźniony?</a></li>
+            <li><a href="#przesiadka" class="text-orange-500 hover:text-orange-600 underline underline-offset-2">9. Opóźnienie a przesiadka — jak nie stracić połączenia</a></li>
+            <li><a href="#odszkodowanie" class="text-orange-500 hover:text-orange-600 underline underline-offset-2">10. Odszkodowanie za opóźnienie pociągu</a></li>
+            <li><a href="#faq" class="text-orange-500 hover:text-orange-600 underline underline-offset-2">11. Najczęstsze pytania</a></li>
+          </ol>
+        </nav>
+      </div>
+    </div>
+  </section>
+
+  <!-- Intro -->
+  <section class="max-w-4xl mx-auto px-4 pb-6">
+    <div class="max-w-2xl mx-auto">
+      <div class="bg-white rounded-2xl border border-stone-200 p-6 md:p-8 shadow-sm">
+        <p class="text-sm text-stone-600 leading-relaxed mb-4">
+          Opóźnienia pociągów w Polsce to codzienność — średnio <strong class="text-stone-800">co czwarty pociąg PKP Intercity</strong> nie przyjeżdża na czas. Niezależnie czy jedziesz IC, EIC, TLK czy pociągiem regionalnym, warto wiedzieć jak szybko sprawdzić aktualne opóźnienie.
+        </p>
+        <p class="text-sm text-stone-600 leading-relaxed">
+          W tym poradniku opisujemy <strong class="text-stone-800">wszystkie sposoby na sprawdzenie opóźnień pociągów</strong> w Polsce — od oficjalnych narzędzi PKP, przez popularne aplikacje, po niezależne serwisy. Pokażemy też co robić, gdy Twój pociąg się spóźnia i jak nie stracić przesiadki.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 1. Portal Pasażera -->
+  <section id="portal-pasazera" class="bg-white border-y border-stone-200">
+    <div class="max-w-4xl mx-auto px-4 py-10">
+      <div class="max-w-2xl mx-auto">
+        <h2 class="text-lg font-bold text-stone-800 mb-1">1. Portal Pasażera — najdokładniejsze dane o opóźnieniach</h2>
+        <p class="text-xs text-stone-400 mb-5">portalpasazera.pl &middot; Aplikacja mobilna (Android, iOS) &middot; Bezpłatny</p>
+
+        <div class="space-y-4 text-sm text-stone-600">
+          <p>
+            <strong class="text-stone-800">Portal Pasażera</strong> to oficjalne narzędzie PKP Polskich Linii Kolejowych (PKP PLK) — zarządcy infrastruktury kolejowej w Polsce. To ten sam system, który zasila elektroniczne tablice informacyjne na dworcach. Dane pochodzą bezpośrednio od dyżurnych ruchu na stacjach, więc są <strong class="text-stone-800">najdokładniejsze ze wszystkich dostępnych źródeł</strong>.
+          </p>
+
+          <h3 class="text-base font-semibold text-stone-800 pt-2">Jak sprawdzić opóźnienie na Portalu Pasażera — krok po kroku</h3>
+
+          <ol class="space-y-3">
+            <li class="flex items-start gap-3">
+              <span class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">1</span>
+              <span>Wejdź na <strong class="text-stone-800">portalpasazera.pl</strong> lub otwórz aplikację Portal Pasażera na telefonie</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">2</span>
+              <span>Wpisz <strong class="text-stone-800">numer pociągu</strong> (np. IC 5313) lub <strong class="text-stone-800">nazwę stacji</strong> w wyszukiwarkę</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">3</span>
+              <span>System pokaże <strong class="text-stone-800">planowy i rzeczywisty czas</strong> przyjazdu/odjazdu dla każdej stacji na trasie</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">4</span>
+              <span>Kliknij <strong class="text-stone-800">"Pociągi na mapie"</strong> żeby zobaczyć lokalizację pociągu w czasie rzeczywistym</span>
+            </li>
+          </ol>
+
+          <h3 class="text-base font-semibold text-stone-800 pt-2">Co zobaczysz na Portalu Pasażera</h3>
+          <ul class="space-y-1.5">
+            <li class="flex items-start gap-2">
+              <span class="text-orange-400 mt-0.5">&#10003;</span>
+              <span>Aktualne opóźnienie w minutach dla każdej stacji na trasie</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-orange-400 mt-0.5">&#10003;</span>
+              <span>Numer peronu i toru (z którego odjeżdża/przyjeżdża pociąg)</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-orange-400 mt-0.5">&#10003;</span>
+              <span>Lokalizację pociągu na mapie w czasie rzeczywistym</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-orange-400 mt-0.5">&#10003;</span>
+              <span>Komunikaty o utrudnieniach i zmianach w rozkładzie</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-orange-400 mt-0.5">&#10003;</span>
+              <span>Tablicę odjazdów/przyjazdów dla wybranej stacji</span>
+            </li>
+          </ul>
+
+          <div class="bg-stone-50 rounded-xl p-4 border border-stone-200">
+            <p class="text-xs text-stone-500">
+              <strong class="text-stone-700">Uwaga:</strong> Od maja 2023 r. Portal Pasażera zastąpił dawny serwis Infopasażer (infopasazer.intercity.pl). Wszystkie dane o ruchu pociągów dostępne są teraz w jednym miejscu — na portalpasazera.pl.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2. KOLEO -->
+  <section id="koleo" class="max-w-4xl mx-auto px-4 py-10">
+    <div class="max-w-2xl mx-auto">
+      <h2 class="text-lg font-bold text-stone-800 mb-1">2. KOLEO — opóźnienia widoczne przy kupowaniu biletów</h2>
+      <p class="text-xs text-stone-400 mb-5">koleo.pl &middot; Aplikacja mobilna (Android, iOS) &middot; Bezpłatny (konto wymagane)</p>
+
+      <div class="space-y-4 text-sm text-stone-600">
+        <p>
+          <strong class="text-stone-800">KOLEO</strong> to popularna aplikacja do kupowania biletów kolejowych, która <strong class="text-stone-800">przy okazji pokazuje aktualne opóźnienia</strong> pociągów. Dane pobiera z systemu PKP PLK (tego samego co Portal Pasażera), ale odświeża je co ok. 10 minut.
+        </p>
+
+        <h3 class="text-base font-semibold text-stone-800 pt-2">Jak sprawdzić opóźnienie w KOLEO</h3>
+
+        <ol class="space-y-3">
+          <li class="flex items-start gap-3">
+            <span class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">1</span>
+            <span>Otwórz aplikację <strong class="text-stone-800">KOLEO</strong> i zaloguj się na swoje konto</span>
+          </li>
+          <li class="flex items-start gap-3">
+            <span class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">2</span>
+            <span>Wyszukaj połączenie podając stację odjazdu i przyjazdu</span>
+          </li>
+          <li class="flex items-start gap-3">
+            <span class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">3</span>
+            <span>Przy każdym połączeniu zobaczysz <strong class="text-stone-800">informację o punktualności</strong> — zielony znaczek (na czas) lub czerwony z liczbą minut opóźnienia</span>
+          </li>
+          <li class="flex items-start gap-3">
+            <span class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">4</span>
+            <span>Kliknij w szczegóły połączenia żeby zobaczyć opóźnienie na poszczególnych stacjach</span>
+          </li>
+        </ol>
+
+        <div class="bg-stone-50 rounded-xl p-4 border border-stone-200">
+          <p class="text-xs text-stone-500">
+            <strong class="text-stone-700">Ograniczenie:</strong> KOLEO pokazuje opóźnienia tylko tych przewoźników, którzy wyrazili na to zgodę. Nie zobaczysz opóźnień Kolei Dolnośląskich, SKM Warszawa i Kolei Mazowieckich. Dane odświeżane co ~10 minut — mogą być lekko nieaktualne.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3. Aplikacja PKP Intercity -->
+  <section id="aplikacja-pkp-ic" class="bg-white border-y border-stone-200">
+    <div class="max-w-4xl mx-auto px-4 py-10">
+      <div class="max-w-2xl mx-auto">
+        <h2 class="text-lg font-bold text-stone-800 mb-1">3. Aplikacja PKP Intercity — opóźnienia pociągów IC, EIC, EIP, TLK</h2>
+        <p class="text-xs text-stone-400 mb-5">intercity.pl &middot; Aplikacja mobilna (Android, iOS) &middot; Bezpłatny</p>
+
+        <div class="space-y-4 text-sm text-stone-600">
+          <p>
+            Oficjalna <strong class="text-stone-800">aplikacja PKP Intercity</strong> pozwala sprawdzić opóźnienia pociągów dalekobieżnych — IC, EIC, EIP i TLK. Funkcja śledzenia trasy pokazuje w czasie rzeczywistym, na której stacji znajduje się Twój pociąg i ile ma opóźnienia.
+          </p>
+
+          <h3 class="text-base font-semibold text-stone-800 pt-2">Jak sprawdzić opóźnienie pociągu IC w aplikacji</h3>
+
+          <ol class="space-y-3">
+            <li class="flex items-start gap-3">
+              <span class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">1</span>
+              <span>Pobierz aplikację <strong class="text-stone-800">PKP Intercity</strong> z Google Play lub App Store</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">2</span>
+              <span>Wyszukaj swoje połączenie lub otwórz kupiony bilet</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">3</span>
+              <span>Przejdź do <strong class="text-stone-800">szczegółów trasy</strong> — zobaczysz stacje zaznaczane na szaro w miarę przejazdu pociągu</span>
+            </li>
+            <li class="flex items-start gap-3">
+              <span class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">4</span>
+              <span>Opóźnienie wyświetlane jest <strong class="text-stone-800">przy każdej stacji</strong> — zarówno planowy jak i rzeczywisty czas przyjazdu</span>
+            </li>
+          </ol>
+
+          <h3 class="text-base font-semibold text-stone-800 pt-2">Co zobaczysz w aplikacji PKP IC</h3>
+          <ul class="space-y-1.5">
+            <li class="flex items-start gap-2">
+              <span class="text-orange-400 mt-0.5">&#10003;</span>
+              <span>Opóźnienie w minutach na każdej stacji</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-orange-400 mt-0.5">&#10003;</span>
+              <span>Informację o torze i peronie</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-orange-400 mt-0.5">&#10003;</span>
+              <span>Śledzenie trasy w czasie rzeczywistym</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-orange-400 mt-0.5">&#10003;</span>
+              <span>Powiadomienia o zmianach (jeśli masz kupiony bilet w aplikacji)</span>
+            </li>
+          </ul>
+
+          <div class="bg-stone-50 rounded-xl p-4 border border-stone-200">
+            <p class="text-xs text-stone-500">
+              <strong class="text-stone-700">Ograniczenie:</strong> Aplikacja PKP Intercity obsługuje tylko pociągi dalekobieżne (IC, EIC, EIP, TLK). Nie sprawdzisz tu opóźnień pociągów regionalnych Polregio, Kolei Mazowieckich, SKM czy Kolei Dolnośląskich.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4. Rozkład-PKP.pl -->
+  <section id="rozklad-pkp" class="max-w-4xl mx-auto px-4 py-10">
+    <div class="max-w-2xl mx-auto">
+      <h2 class="text-lg font-bold text-stone-800 mb-1">4. Rozkład-PKP.pl — opóźnienia w wyszukiwarce połączeń</h2>
+      <p class="text-xs text-stone-400 mb-5">rozklad-pkp.pl &middot; Przeglądarka &middot; Bezpłatny</p>
+
+      <div class="space-y-4 text-sm text-stone-600">
+        <p>
+          <strong class="text-stone-800">Rozkład-PKP.pl</strong> to oficjalna wyszukiwarka połączeń kolejowych, która przy okazji wyświetla <strong class="text-stone-800">aktualne komunikaty o opóźnieniach i utrudnieniach</strong> (moduł HIM — Hindrances Information Module).
+        </p>
+
+        <h3 class="text-base font-semibold text-stone-800 pt-2">Jak korzystać</h3>
+
+        <ol class="space-y-3">
+          <li class="flex items-start gap-3">
+            <span class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">1</span>
+            <span>Wejdź na <strong class="text-stone-800">rozklad-pkp.pl</strong></span>
+          </li>
+          <li class="flex items-start gap-3">
+            <span class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">2</span>
+            <span>Wyszukaj połączenie wpisując stację odjazdu i przyjazdu</span>
+          </li>
+          <li class="flex items-start gap-3">
+            <span class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">3</span>
+            <span>Przy wynikach zobaczysz <strong class="text-stone-800">ikony ostrzegawcze</strong> jeśli na trasie są utrudnienia</span>
+          </li>
+          <li class="flex items-start gap-3">
+            <span class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">4</span>
+            <span>Zakładka <strong class="text-stone-800">"Komunikaty"</strong> (rozklad-pkp.pl/pl/him) pokazuje zbiorcze informacje o utrudnieniach</span>
+          </li>
+        </ol>
+
+        <div class="bg-stone-50 rounded-xl p-4 border border-stone-200">
+          <p class="text-xs text-stone-500">
+            <strong class="text-stone-700">Warto wiedzieć:</strong> Rozkład-PKP.pl nie pokazuje opóźnień w minutach w czasie rzeczywistym jak Portal Pasażera. Znajdziesz tu raczej ogólne komunikaty o utrudnieniach, zamknięciach torów i zastępczej komunikacji autobusowej.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 5. niejedzie.pl -->
+  <section id="niejedzie" class="bg-white border-y border-stone-200">
+    <div class="max-w-4xl mx-auto px-4 py-10">
+      <div class="max-w-2xl mx-auto">
+        <h2 class="text-lg font-bold text-stone-800 mb-1">5. niejedzie.pl — monitoring przesiadek i alertów</h2>
+        <p class="text-xs text-stone-400 mb-5">niejedzie.pl &middot; Przeglądarka (PWA) &middot; Sprawdzenie opóźnienia darmowe, monitoring 5 zł</p>
+
+        <div class="space-y-4 text-sm text-stone-600">
+          <p>
+            <strong class="text-stone-800">niejedzie.pl</strong> to narzędzie stworzone specjalnie z myślą o pasażerach, którzy <strong class="text-stone-800">mają przesiadkę i chcą wiedzieć czy na nią zdążą</strong>. W odróżnieniu od innych narzędzi, niejedzie.pl nie tylko pokazuje opóźnienie — ale aktywnie monitoruje Twój pociąg i wysyła powiadomienie jeśli przesiadka jest zagrożona.
+          </p>
+
+          <h3 class="text-base font-semibold text-stone-800 pt-2">Co wyróżnia niejedzie.pl</h3>
+          <ul class="space-y-1.5">
+            <li class="flex items-start gap-2">
+              <span class="text-orange-400 mt-0.5">&#10003;</span>
+              <span><strong class="text-stone-800">Monitoring przesiadek</strong> — podajesz dwa pociągi, a system pilnuje czy zdążysz</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-orange-400 mt-0.5">&#10003;</span>
+              <span><strong class="text-stone-800">Powiadomienia push</strong> — dostaniesz alert jeśli opóźnienie się zwiększy</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-orange-400 mt-0.5">&#10003;</span>
+              <span><strong class="text-stone-800">Alternatywne połączenia</strong> — podpowiemy następny pociąg jeśli nie zdążysz</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-orange-400 mt-0.5">&#10003;</span>
+              <span><strong class="text-stone-800">Dane z PKP PLK</strong> — te same dane co na tablicach dworcowych</span>
+            </li>
+          </ul>
+
+          <!-- CTA -->
+          <div class="bg-orange-50 rounded-xl p-5 border border-orange-200 text-center mt-4">
+            <p class="text-sm font-semibold text-stone-800 mb-2">Masz przesiadkę? Sprawdź czy zdążysz.</p>
+            <p class="text-xs text-stone-500 mb-4">Podaj numery pociągów — pokażemy aktualne opóźnienia i ile czasu zostało na przesiadkę.</p>
+            <a href="/" class="inline-block px-6 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl transition-colors text-sm">
+              Sprawdź przesiadkę na niejedzie.pl
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 6. Inne źródła -->
+  <section id="inne-zrodla" class="max-w-4xl mx-auto px-4 py-10">
+    <div class="max-w-2xl mx-auto">
+      <h2 class="text-lg font-bold text-stone-800 mb-5">6. Inne źródła informacji o opóźnieniach</h2>
+
+      <div class="space-y-4">
+        <!-- Tablice -->
+        <div class="bg-white rounded-xl border border-stone-200 p-5 shadow-sm">
+          <h3 class="text-sm font-semibold text-stone-800 mb-2">Tablice informacyjne na dworcach</h3>
+          <p class="text-sm text-stone-500">
+            Elektroniczne tablice na dworcach pokazują aktualne opóźnienia, zmiany peronów i odwołania. Dane pochodzą z systemu PKP PLK (tego samego co Portal Pasażera). To najszybszy sposób jeśli jesteś już na dworcu — nie musisz otwierać żadnej aplikacji.
+          </p>
+        </div>
+
+        <!-- Strony przewoźników -->
+        <div class="bg-white rounded-xl border border-stone-200 p-5 shadow-sm">
+          <h3 class="text-sm font-semibold text-stone-800 mb-2">Strony przewoźników regionalnych</h3>
+          <p class="text-sm text-stone-500">
+            Każdy przewoźnik regionalny ma własną stronę z komunikatami o opóźnieniach: <strong class="text-stone-700">Polregio</strong> (polregio.pl), <strong class="text-stone-700">Koleje Mazowieckie</strong> (mazowieckie.com.pl), <strong class="text-stone-700">SKM Trójmiasto</strong> (skm.pkp.pl), <strong class="text-stone-700">Koleje Dolnośląskie</strong> (kolejedolnoslaskie.pl), <strong class="text-stone-700">Koleje Śląskie</strong> (kolejeslaskie.com) i inni.
+          </p>
+        </div>
+
+        <!-- Social media -->
+        <div class="bg-white rounded-xl border border-stone-200 p-5 shadow-sm">
+          <h3 class="text-sm font-semibold text-stone-800 mb-2">Media społecznościowe przewoźników</h3>
+          <p class="text-sm text-stone-500">
+            W przypadku dużych utrudnień (zerwana sieć trakcyjna, wypadek, zamknięcie linii) przewoźnicy publikują komunikaty na <strong class="text-stone-700">X (dawny Twitter)</strong> i <strong class="text-stone-700">Facebooku</strong>. PKP Intercity i Polregio są tu szczególnie aktywne. Przydatne przy masowych odwołaniach.
+          </p>
+        </div>
+
+        <!-- czypociagsiespozni.pl -->
+        <div class="bg-white rounded-xl border border-stone-200 p-5 shadow-sm">
+          <h3 class="text-sm font-semibold text-stone-800 mb-2">czypociagsiespozni.pl — prognozowane opóźnienia</h3>
+          <p class="text-sm text-stone-500">
+            Niezależny serwis, który na podstawie danych historycznych i algorytmów machine learning <strong class="text-stone-700">prognozuje prawdopodobieństwo opóźnienia</strong> konkretnego pociągu. Przydatne przy planowaniu podróży — sprawdzisz czy dany pociąg regularnie się spóźnia. Dane mogą być opóźnione o 10-50 minut względem rzeczywistości.
+          </p>
+        </div>
+
+        <!-- Infolinia -->
+        <div class="bg-white rounded-xl border border-stone-200 p-5 shadow-sm">
+          <h3 class="text-sm font-semibold text-stone-800 mb-2">Infolinia i obsługa pociągu</h3>
+          <p class="text-sm text-stone-500">
+            Jeśli opóźnienie jest duże lub grozi utratą przesiadki, porozmawiaj z <strong class="text-stone-700">konduktorem</strong> lub zadzwoń na <strong class="text-stone-700">infolinię PKP Intercity: 703 200 200</strong>. Obsługa ma dostęp do wewnętrznych systemów i może potwierdzić prognozowany czas przyjazdu oraz doradzić w sprawie przesiadki.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 7. Porównanie narzędzi -->
+  <section id="porownanie" class="bg-white border-y border-stone-200">
+    <div class="max-w-4xl mx-auto px-4 py-10">
+      <div class="max-w-2xl mx-auto">
+        <h2 class="text-lg font-bold text-stone-800 mb-5">7. Porównanie — które narzędzie wybrać?</h2>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm border border-stone-200 rounded-xl overflow-hidden">
+            <thead>
+              <tr class="bg-stone-50">
+                <th class="text-left p-3 font-semibold text-stone-700 border-b border-stone-200">Narzędzie</th>
+                <th class="text-center p-3 font-semibold text-stone-700 border-b border-stone-200">Opóźnienia live</th>
+                <th class="text-center p-3 font-semibold text-stone-700 border-b border-stone-200">Mapa</th>
+                <th class="text-center p-3 font-semibold text-stone-700 border-b border-stone-200">Przesiadki</th>
+                <th class="text-center p-3 font-semibold text-stone-700 border-b border-stone-200">Alerty</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="border-b border-stone-100">
+                <td class="p-3 font-medium text-stone-800">Portal Pasażera</td>
+                <td class="p-3 text-center text-green-600">&#10003;</td>
+                <td class="p-3 text-center text-green-600">&#10003;</td>
+                <td class="p-3 text-center text-stone-300">&mdash;</td>
+                <td class="p-3 text-center text-stone-300">&mdash;</td>
+              </tr>
+              <tr class="border-b border-stone-100 bg-stone-50/50">
+                <td class="p-3 font-medium text-stone-800">KOLEO</td>
+                <td class="p-3 text-center text-green-600">&#10003;*</td>
+                <td class="p-3 text-center text-stone-300">&mdash;</td>
+                <td class="p-3 text-center text-stone-300">&mdash;</td>
+                <td class="p-3 text-center text-stone-300">&mdash;</td>
+              </tr>
+              <tr class="border-b border-stone-100">
+                <td class="p-3 font-medium text-stone-800">Aplikacja PKP IC</td>
+                <td class="p-3 text-center text-green-600">&#10003;</td>
+                <td class="p-3 text-center text-stone-300">&mdash;</td>
+                <td class="p-3 text-center text-stone-300">&mdash;</td>
+                <td class="p-3 text-center text-green-600">&#10003;**</td>
+              </tr>
+              <tr class="border-b border-stone-100 bg-stone-50/50">
+                <td class="p-3 font-medium text-stone-800">Rozkład-PKP.pl</td>
+                <td class="p-3 text-center text-amber-500">Komunikaty</td>
+                <td class="p-3 text-center text-stone-300">&mdash;</td>
+                <td class="p-3 text-center text-stone-300">&mdash;</td>
+                <td class="p-3 text-center text-stone-300">&mdash;</td>
+              </tr>
+              <tr class="bg-orange-50/50">
+                <td class="p-3 font-medium text-orange-600">niejedzie.pl</td>
+                <td class="p-3 text-center text-green-600">&#10003;</td>
+                <td class="p-3 text-center text-stone-300">&mdash;</td>
+                <td class="p-3 text-center text-green-600">&#10003;</td>
+                <td class="p-3 text-center text-green-600">&#10003;</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="text-xs text-stone-400 mt-3">
+          * KOLEO odświeża dane co ~10 min, nie u wszystkich przewoźników &middot; ** Tylko jeśli masz bilet kupiony w aplikacji PKP IC
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 8. Co zrobić gdy pociąg jest opóźniony -->
+  <section id="co-robic" class="max-w-4xl mx-auto px-4 py-10">
+    <div class="max-w-2xl mx-auto">
+      <h2 class="text-lg font-bold text-stone-800 mb-5">8. Co zrobić gdy pociąg jest opóźniony?</h2>
+
+      <div class="bg-white rounded-2xl border border-stone-200 p-6 md:p-8 shadow-sm space-y-5 text-sm text-stone-600">
+        <div>
+          <h3 class="font-semibold text-stone-800 mb-2">Opóźnienie do 30 minut</h3>
+          <p>Monitoruj sytuację przez Portal Pasażera lub niejedzie.pl. Niewielkie opóźnienia często się zmniejszają w trakcie trasy (pociąg "nadrabia"). Nie ma potrzeby podejmować dodatkowych działań.</p>
+        </div>
+
+        <div>
+          <h3 class="font-semibold text-stone-800 mb-2">Opóźnienie 30-60 minut</h3>
+          <ul class="space-y-1.5">
+            <li class="flex items-start gap-2">
+              <span class="text-stone-300">&bull;</span>
+              <span>Jeśli masz przesiadkę — sprawdź na niejedzie.pl czy zdążysz i rozważ alternatywne połączenia</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-stone-300">&bull;</span>
+              <span>Porozmawiaj z konduktorem — może potwierdzić prognozowany czas przyjazdu</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-stone-300">&bull;</span>
+              <span>Poinformuj osobę czekającą na dworcu o spóźnieniu</span>
+            </li>
+          </ul>
+        </div>
+
+        <div>
+          <h3 class="font-semibold text-stone-800 mb-2">Opóźnienie powyżej 60 minut</h3>
+          <ul class="space-y-1.5">
+            <li class="flex items-start gap-2">
+              <span class="text-stone-300">&bull;</span>
+              <span><strong class="text-stone-800">Przysługuje Ci odszkodowanie</strong> — 25% ceny biletu (60-119 min) lub 50% (120+ min)</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-stone-300">&bull;</span>
+              <span>Przewoźnik powinien zapewnić <strong class="text-stone-800">posiłek i napoje</strong> odpowiednie do czasu oczekiwania</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-stone-300">&bull;</span>
+              <span>Jeśli konieczny jest nocleg — przewoźnik powinien go zapewnić lub zwrócić koszty</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-stone-300">&bull;</span>
+              <span>Zachowaj bilet — będzie potrzebny do złożenia reklamacji</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="bg-amber-50 rounded-xl p-4 border border-amber-200">
+          <p class="text-xs text-amber-800">
+            <strong>Ważne:</strong> Jeśli przewoźnik nie poinformuje Cię o alternatywnym transporcie w ciągu 100 minut od planowego odjazdu opóźnionego pociągu, masz prawo samodzielnie zorganizować transport i żądać zwrotu poniesionych kosztów.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 9. Przesiadka -->
+  <section id="przesiadka" class="bg-white border-y border-stone-200">
+    <div class="max-w-4xl mx-auto px-4 py-10">
+      <div class="max-w-2xl mx-auto">
+        <h2 class="text-lg font-bold text-stone-800 mb-5">9. Opóźnienie a przesiadka — jak nie stracić połączenia</h2>
+
+        <div class="space-y-4 text-sm text-stone-600">
+          <p>
+            Przesiadka to <strong class="text-stone-800">najbardziej stresujący moment podróży pociągiem</strong> — zwłaszcza gdy pierwszy pociąg się spóźnia. Oto co powinieneś wiedzieć:
+          </p>
+
+          <h3 class="text-base font-semibold text-stone-800 pt-2">Twoje prawa przy utracie przesiadki</h3>
+          <ul class="space-y-2">
+            <li class="flex items-start gap-2">
+              <span class="text-orange-400 mt-0.5">&#10003;</span>
+              <span>Jeśli opóźnienie pierwszego pociągu spowodowało utratę przesiadki, <strong class="text-stone-800">masz prawo jechać następnym pociągiem tego samego przewoźnika bez dopłaty</strong></span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-orange-400 mt-0.5">&#10003;</span>
+              <span>Zgłoś sytuację <strong class="text-stone-800">konduktorowi w pociągu</strong> lub <strong class="text-stone-800">w kasie biletowej</strong> na stacji przesiadkowej</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-orange-400 mt-0.5">&#10003;</span>
+              <span>Jeśli łączne opóźnienie przekroczy 60 minut — przysługuje Ci <strong class="text-stone-800">odszkodowanie od przewoźnika</strong></span>
+            </li>
+          </ul>
+
+          <h3 class="text-base font-semibold text-stone-800 pt-2">Jak się zabezpieczyć?</h3>
+          <ul class="space-y-2">
+            <li class="flex items-start gap-2">
+              <span class="text-stone-300">&bull;</span>
+              <span><strong class="text-stone-800">Planuj z zapasem</strong> — jeśli to możliwe, wybieraj połączenia z przesiadką dłuższą niż 20 minut</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-stone-300">&bull;</span>
+              <span><strong class="text-stone-800">Monitoruj opóźnienie</strong> — im wcześniej wiesz o problemie, tym więcej masz opcji</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-stone-300">&bull;</span>
+              <span><strong class="text-stone-800">Sprawdź alternatywy z wyprzedzeniem</strong> — następne połączenia w tym samym kierunku</span>
+            </li>
+            <li class="flex items-start gap-2">
+              <span class="text-stone-300">&bull;</span>
+              <span><strong class="text-stone-800">Włącz monitoring na niejedzie.pl</strong> — dostaniesz alert i propozycje alternatyw automatycznie</span>
+            </li>
+          </ul>
+
+          <!-- CTA -->
+          <div class="bg-orange-50 rounded-xl p-5 border border-orange-200 text-center mt-4">
+            <p class="text-sm font-semibold text-stone-800 mb-2">Nie ryzykuj utraty przesiadki</p>
+            <p class="text-xs text-stone-500 mb-4">Za 5 zł monitorujemy Twój pociąg i damy Ci znać jeśli przesiadka jest zagrożona. Podpowiemy alternatywne połączenia.</p>
+            <a href="/" class="inline-block px-6 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl transition-colors text-sm">
+              Monitoruj przesiadkę — 5 zł
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 10. Odszkodowanie -->
+  <section id="odszkodowanie" class="max-w-4xl mx-auto px-4 py-10">
+    <div class="max-w-2xl mx-auto">
+      <h2 class="text-lg font-bold text-stone-800 mb-5">10. Odszkodowanie za opóźnienie pociągu</h2>
+
+      <div class="bg-white rounded-2xl border border-stone-200 p-6 md:p-8 shadow-sm space-y-4 text-sm text-stone-600">
+        <p>
+          Na podstawie <strong class="text-stone-800">Rozporządzenia (UE) 2021/782</strong> (wcześniej Rozporządzenie (WE) nr 1371/2007) pasażerowie pociągów dalekobieżnych mają prawo do odszkodowania za opóźnienia:
+        </p>
+
+        <!-- Compensation table -->
+        <div class="grid grid-cols-2 gap-3 py-2">
+          <div class="bg-amber-50 rounded-xl p-4 text-center border border-amber-200">
+            <div class="text-2xl font-bold text-amber-600 mb-1">25%</div>
+            <div class="text-xs text-stone-500">ceny biletu</div>
+            <div class="text-xs font-semibold text-stone-700 mt-1">Opóźnienie 60-119 min</div>
+          </div>
+          <div class="bg-orange-50 rounded-xl p-4 text-center border border-orange-200">
+            <div class="text-2xl font-bold text-orange-600 mb-1">50%</div>
+            <div class="text-xs text-stone-500">ceny biletu</div>
+            <div class="text-xs font-semibold text-stone-700 mt-1">Opóźnienie 120+ min</div>
+          </div>
+        </div>
+
+        <h3 class="font-semibold text-stone-800 pt-1">Których pociągów dotyczy?</h3>
+        <p>Odszkodowanie przysługuje za pociągi dalekobieżne: <strong class="text-stone-800">EIP</strong> (Pendolino), <strong class="text-stone-800">EIC</strong> (Express InterCity), <strong class="text-stone-800">IC</strong> (InterCity), <strong class="text-stone-800">TLK</strong> (Twoje Linie Kolejowe) oraz pociągi międzynarodowe. Minimalna kwota odszkodowania to 4 EUR.</p>
+
+        <h3 class="font-semibold text-stone-800 pt-1">Jak złożyć reklamację?</h3>
+        <ol class="space-y-1.5 list-decimal list-inside">
+          <li>Zachowaj bilet (papierowy lub elektroniczny)</li>
+          <li>Złóż reklamację u przewoźnika — online, pocztą lub w kasie biletowej</li>
+          <li>Masz na to <strong class="text-stone-800">3 miesiące</strong> od daty podróży</li>
+          <li>Przewoźnik ma 30 dni na odpowiedź</li>
+        </ol>
+
+        <div class="pt-2">
+          <a href="/odszkodowanie-za-opoznienie" class="text-orange-500 hover:text-orange-600 text-sm font-medium underline underline-offset-2">
+            Przeczytaj pełny poradnik o odszkodowaniach za opóźnienia pociągów &rarr;
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 11. FAQ -->
+  <section id="faq" class="bg-white border-y border-stone-200">
+    <div class="max-w-4xl mx-auto px-4 py-10">
+      <div class="max-w-2xl mx-auto">
+        <h2 class="text-sm font-semibold text-stone-400 uppercase tracking-wider mb-8 text-center">Najczęstsze pytania</h2>
+
+        <div class="space-y-4">
+          <div class="bg-stone-50 rounded-xl border border-stone-200 p-5">
+            <h3 class="text-sm font-semibold text-stone-800 mb-2">Jak sprawdzić opóźnienie pociągu IC?</h3>
+            <p class="text-sm text-stone-500">
+              Najszybciej przez <strong class="text-stone-700">Portal Pasażera</strong> (portalpasazera.pl) — wpisz numer pociągu lub stację i zobaczysz aktualne opóźnienie w minutach. Możesz też skorzystać z aplikacji KOLEO lub aplikacji PKP Intercity. Na niejedzie.pl dodatkowo monitorujesz przesiadkę.
+            </p>
+          </div>
+
+          <div class="bg-stone-50 rounded-xl border border-stone-200 p-5">
+            <h3 class="text-sm font-semibold text-stone-800 mb-2">Gdzie sprawdzić opóźnienia pociągów online?</h3>
+            <p class="text-sm text-stone-500">
+              Opóźnienia pociągów sprawdzisz online na: <strong class="text-stone-700">Portal Pasażera</strong> (portalpasazera.pl), w aplikacji <strong class="text-stone-700">KOLEO</strong>, w aplikacji <strong class="text-stone-700">PKP Intercity</strong>, na <strong class="text-stone-700">rozklad-pkp.pl</strong> oraz na <strong class="text-stone-700">niejedzie.pl</strong> — który dodatkowo monitoruje przesiadki i wysyła alerty.
+            </p>
+          </div>
+
+          <div class="bg-stone-50 rounded-xl border border-stone-200 p-5">
+            <h3 class="text-sm font-semibold text-stone-800 mb-2">Czy mogę dostać odszkodowanie za opóźniony pociąg?</h3>
+            <p class="text-sm text-stone-500">
+              Tak. Przy opóźnieniu <strong class="text-stone-700">60-119 minut</strong> przysługuje zwrot 25% ceny biletu, a przy opóźnieniu <strong class="text-stone-700">120+ minut</strong> — 50% ceny biletu. Dotyczy pociągów dalekobieżnych (EIP, EIC, IC, TLK). Reklamację składasz u przewoźnika w ciągu 3 miesięcy od podróży.
+              <a href="/odszkodowanie-za-opoznienie" class="text-orange-500 hover:text-orange-600 underline underline-offset-2 ml-1">Więcej o odszkodowaniach &rarr;</a>
+            </p>
+          </div>
+
+          <div class="bg-stone-50 rounded-xl border border-stone-200 p-5">
+            <h3 class="text-sm font-semibold text-stone-800 mb-2">Co zrobić gdy przez opóźnienie nie zdążę na przesiadkę?</h3>
+            <p class="text-sm text-stone-500">
+              Jeśli opóźnienie pierwszego pociągu spowodowało utratę przesiadki, <strong class="text-stone-700">masz prawo jechać następnym pociągiem tego samego przewoźnika bez dopłaty</strong>. Zgłoś sytuację konduktorowi lub w kasie biletowej na stacji przesiadkowej. Żeby nie być zaskoczonym — <a href="/" class="text-orange-500 hover:text-orange-600 underline underline-offset-2">włącz monitoring przesiadki na niejedzie.pl</a>.
+            </p>
+          </div>
+
+          <div class="bg-stone-50 rounded-xl border border-stone-200 p-5">
+            <h3 class="text-sm font-semibold text-stone-800 mb-2">Jak często odświeżają się dane o opóźnieniach?</h3>
+            <p class="text-sm text-stone-500">
+              Portal Pasażera i niejedzie.pl korzystają z danych PKP PLK aktualizowanych <strong class="text-stone-700">co minutę</strong> przez dyżurnych ruchu. KOLEO odświeża dane co ~10 minut. Aplikacja PKP IC — w czasie rzeczywistym. Dane na dworcowych tablicach informacyjnych są najszybsze — aktualizowane na bieżąco.
+            </p>
+          </div>
+
+          <div class="bg-stone-50 rounded-xl border border-stone-200 p-5">
+            <h3 class="text-sm font-semibold text-stone-800 mb-2">Czy pociąg może nadrobić opóźnienie?</h3>
+            <p class="text-sm text-stone-500">
+              Tak, pociągi często nadrabiają niewielkie opóźnienia (do ~10-15 minut) w trakcie trasy, szczególnie na dłuższych odcinkach między stacjami. Dlatego warto monitorować opóźnienie na bieżąco — może się zarówno zwiększyć, jak i zmniejszyć.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Bottom CTA -->
+  <section class="max-w-4xl mx-auto px-4 py-16 text-center">
+    <h2 class="text-2xl font-bold text-stone-900 mb-3">Nie daj się zaskoczyć opóźnieniem</h2>
+    <p class="text-stone-500 mb-6 max-w-md mx-auto">
+      Sprawdź aktualny status swojego pociągu i włącz monitoring przesiadki — dostaniesz powiadomienie jeśli coś pójdzie nie tak.
+    </p>
+    <a href="/" class="inline-block px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl transition-colors text-sm">
+      Sprawdź przesiadkę na niejedzie.pl
+    </a>
+  </section>
+
+</Base>

@@ -55,6 +55,9 @@ const fullTitle = `${title} | niejedzie.pl`;
 
     <title>{fullTitle}</title>
 
+    <!-- Extra head content (Schema.org, etc.) -->
+    <slot name="head" />
+
     <!-- Plausible Analytics -->
     <script defer data-domain="niejedzie.pl" src="https://plausible.io/js/script.js"></script>
 
