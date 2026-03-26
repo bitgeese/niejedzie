@@ -4,13 +4,13 @@ import Base from '../layouts/Base.astro';
 <Base title="O nas — jak działa niejedzie.pl" description="Czym jest niejedzie.pl, skąd bierzemy dane o opóźnieniach pociągów i jak działa monitoring przesiadek PKP. Najczęściej zadawane pytania.">
 
   <!-- Header -->
-  <section class="bg-stone-900 border-b border-stone-200">
+  <section class="bg-surface-dark border-b border-border">
     <div class="max-w-4xl mx-auto px-4 pt-10 pb-12">
       <div class="max-w-2xl mx-auto text-center">
         <h1 class="text-2xl md:text-3xl font-bold text-white mb-3">
-          Czym jest nie<span class="text-orange-400">jedzie</span>.pl?
+          Czym jest nie<span class="text-brand-400">jedzie</span>.pl?
         </h1>
-        <p class="text-stone-300">
+        <p class="text-ink-faint">
           Narzędzie dla podróżujących pociągami PKP, które mają przesiadkę i chcą wiedzieć czy na nią zdążą.
         </p>
       </div>
@@ -20,23 +20,23 @@ import Base from '../layouts/Base.astro';
   <!-- What is niejedzie.pl -->
   <section class="max-w-4xl mx-auto px-4 py-12">
     <div class="max-w-2xl mx-auto">
-      <div class="bg-white rounded-2xl border border-stone-200 p-6 md:p-8 shadow-sm">
-        <h2 class="text-lg font-bold text-stone-800 mb-4">Jak to działa</h2>
-        <ul class="space-y-3 text-sm text-stone-600">
+      <div class="bg-surface-raised rounded-2xl border border-border p-6 md:p-8 shadow-sm">
+        <h2 class="text-lg font-bold text-ink mb-4">Jak to działa</h2>
+        <ul class="space-y-3 text-sm text-ink-secondary">
           <li class="flex items-start gap-3">
-            <span class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">1</span>
+            <span class="w-6 h-6 rounded-full bg-brand-100 text-brand-600 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">1</span>
             <span>Podajesz numery dwóch pociągów i stację przesiadkową</span>
           </li>
           <li class="flex items-start gap-3">
-            <span class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">2</span>
+            <span class="w-6 h-6 rounded-full bg-brand-100 text-brand-600 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">2</span>
             <span>Pokazujemy aktualne opóźnienia obu pociągów i ile zostało Ci czasu na przesiadkę</span>
           </li>
           <li class="flex items-start gap-3">
-            <span class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">3</span>
+            <span class="w-6 h-6 rounded-full bg-brand-100 text-brand-600 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">3</span>
             <span>Za jednorazowe 5 zł włączasz monitoring — śledzimy Twój pociąg i wysyłamy powiadomienie push jeśli opóźnienie się zmieni</span>
           </li>
           <li class="flex items-start gap-3">
-            <span class="w-6 h-6 rounded-full bg-orange-100 text-orange-600 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">4</span>
+            <span class="w-6 h-6 rounded-full bg-brand-100 text-brand-600 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">4</span>
             <span>Jeśli przesiadka jest zagrożona — podpowiemy alternatywne połączenie. Jeśli opóźnienie przekroczy 60 minut — pomożemy sprawdzić prawo do odszkodowania.</span>
           </li>
         </ul>
@@ -45,18 +45,18 @@ import Base from '../layouts/Base.astro';
   </section>
 
   <!-- Data source -->
-  <section class="bg-white border-y border-stone-200">
+  <section class="bg-surface-raised border-y border-border">
     <div class="max-w-4xl mx-auto px-4 py-10">
       <div class="max-w-2xl mx-auto">
-        <h2 class="text-lg font-bold text-stone-800 mb-4">Skąd bierzemy dane?</h2>
-        <div class="space-y-3 text-sm text-stone-600">
+        <h2 class="text-lg font-bold text-ink mb-4">Skąd bierzemy dane?</h2>
+        <div class="space-y-3 text-sm text-ink-secondary">
           <p>
-            Korzystamy z oficjalnego API <strong class="text-stone-800">Otwartych Danych Kolejowych PKP PLK</strong> (Polskie Linie Kolejowe). To ten sam system, który zasila tablice informacyjne na dworcach.
+            Korzystamy z oficjalnego API <strong class="text-ink">Otwartych Danych Kolejowych PKP PLK</strong> (Polskie Linie Kolejowe). To ten sam system, który zasila tablice informacyjne na dworcach.
           </p>
           <p>
             Dane o opóźnieniach aktualizowane są co minutę. Pokazujemy planowy i rzeczywisty czas przyjazdu/odjazdu dla każdej stacji na trasie pociągu.
           </p>
-          <p class="text-xs text-stone-400">
+          <p class="text-xs text-ink-faint">
             Źródło danych: pdp-api.plk-sa.pl &middot; Publiczny Dostęp do Danych Kolejowych
           </p>
         </div>
@@ -67,66 +67,66 @@ import Base from '../layouts/Base.astro';
   <!-- FAQ -->
   <section class="max-w-4xl mx-auto px-4 py-12">
     <div class="max-w-2xl mx-auto">
-      <h2 class="text-sm font-semibold text-stone-400 uppercase tracking-wider mb-8 text-center">Najczęstsze pytania</h2>
+      <h2 class="text-sm font-semibold text-ink-faint uppercase tracking-wider mb-8 text-center">Najczęstsze pytania</h2>
 
       <div class="space-y-4">
         <!-- Q1 -->
-        <div class="bg-white rounded-xl border border-stone-200 p-5">
-          <h3 class="text-sm font-semibold text-stone-800 mb-2">Czy to oficjalna strona PKP?</h3>
-          <p class="text-sm text-stone-500">
+        <div class="bg-surface-raised rounded-xl border border-border p-5">
+          <h3 class="text-sm font-semibold text-ink mb-2">Czy to oficjalna strona PKP?</h3>
+          <p class="text-sm text-ink-muted">
             Nie. niejedzie.pl to niezależne narzędzie. Nie jesteśmy powiązani z PKP Intercity, PKP PLK ani żadną inną spółką PKP. Korzystamy z publicznych danych udostępnianych przez PKP PLK.
           </p>
         </div>
 
         <!-- Q2 -->
-        <div class="bg-white rounded-xl border border-stone-200 p-5">
-          <h3 class="text-sm font-semibold text-stone-800 mb-2">Ile kosztuje monitoring przesiadki?</h3>
-          <p class="text-sm text-stone-500">
+        <div class="bg-surface-raised rounded-xl border border-border p-5">
+          <h3 class="text-sm font-semibold text-ink mb-2">Ile kosztuje monitoring przesiadki?</h3>
+          <p class="text-sm text-ink-muted">
             5 zł za jedną przesiadkę. Jednorazowa płatność, bez subskrypcji. Monitorujemy Twój pociąg do końca podróży. Sprawdzenie opóźnienia (bez monitoringu) jest darmowe.
           </p>
         </div>
 
         <!-- Q3 -->
-        <div class="bg-white rounded-xl border border-stone-200 p-5">
-          <h3 class="text-sm font-semibold text-stone-800 mb-2">Co się stanie jeśli nie zdążę na przesiadkę?</h3>
-          <p class="text-sm text-stone-500">
+        <div class="bg-surface-raised rounded-xl border border-border p-5">
+          <h3 class="text-sm font-semibold text-ink mb-2">Co się stanie jeśli nie zdążę na przesiadkę?</h3>
+          <p class="text-sm text-ink-muted">
             Wyślemy Ci powiadomienie z listą następnych pociągów jadących w tym samym kierunku. Zgodnie z regulaminem PKP Intercity, jeśli opóźnienie pierwszego pociągu było przyczyną utraty połączenia, możesz jechać następnym pociągiem tego samego przewoźnika bez dopłaty.
           </p>
         </div>
 
         <!-- Q4 -->
-        <div class="bg-white rounded-xl border border-stone-200 p-5">
-          <h3 class="text-sm font-semibold text-stone-800 mb-2">Czy mogę dostać odszkodowanie za opóźniony pociąg?</h3>
-          <p class="text-sm text-stone-500">
+        <div class="bg-surface-raised rounded-xl border border-border p-5">
+          <h3 class="text-sm font-semibold text-ink mb-2">Czy mogę dostać odszkodowanie za opóźniony pociąg?</h3>
+          <p class="text-sm text-ink-muted">
             Tak, zgodnie z Rozporządzeniem (WE) nr 1371/2007:
           </p>
-          <ul class="mt-2 space-y-1 text-sm text-stone-500">
+          <ul class="mt-2 space-y-1 text-sm text-ink-muted">
             <li class="flex items-start gap-2">
-              <span class="text-stone-300">&bull;</span>
+              <span class="text-ink-faint">&bull;</span>
               Opóźnienie 60-119 min: zwrot 25% ceny biletu
             </li>
             <li class="flex items-start gap-2">
-              <span class="text-stone-300">&bull;</span>
+              <span class="text-ink-faint">&bull;</span>
               Opóźnienie 120+ min: zwrot 50% ceny biletu
             </li>
           </ul>
-          <p class="text-sm text-stone-500 mt-2">
+          <p class="text-sm text-ink-muted mt-2">
             Reklamację składasz bezpośrednio u przewoźnika. Jeśli włączysz monitoring, sprawdzimy automatycznie czy przysługuje Ci odszkodowanie.
           </p>
         </div>
 
         <!-- Q5 -->
-        <div class="bg-white rounded-xl border border-stone-200 p-5">
-          <h3 class="text-sm font-semibold text-stone-800 mb-2">Które pociągi obsługujecie?</h3>
-          <p class="text-sm text-stone-500">
+        <div class="bg-surface-raised rounded-xl border border-border p-5">
+          <h3 class="text-sm font-semibold text-ink mb-2">Które pociągi obsługujecie?</h3>
+          <p class="text-sm text-ink-muted">
             Dane obejmują wszystkie pociągi pasażerskie kursujące po torach zarządzanych przez PKP PLK — czyli PKP Intercity (IC, EIC, EIP, TLK), Koleje Mazowieckie, SKM, Koleje Dolnośląskie, Koleje Śląskie i innych przewoźników regionalnych.
           </p>
         </div>
 
         <!-- Q6 -->
-        <div class="bg-white rounded-xl border border-stone-200 p-5">
-          <h3 class="text-sm font-semibold text-stone-800 mb-2">Jak działa powiadomienie push?</h3>
-          <p class="text-sm text-stone-500">
+        <div class="bg-surface-raised rounded-xl border border-border p-5">
+          <h3 class="text-sm font-semibold text-ink mb-2">Jak działa powiadomienie push?</h3>
+          <p class="text-sm text-ink-muted">
             Po włączeniu monitoringu poprosmy o zgodę na powiadomienia w przeglądarce. Dostaniesz alert na telefon lub komputer gdy opóźnienie Twojego pociągu się zmieni. Nie trzeba instalować żadnej aplikacji.
           </p>
         </div>
@@ -135,13 +135,13 @@ import Base from '../layouts/Base.astro';
   </section>
 
   <!-- Contact / CTA -->
-  <section class="bg-white border-y border-stone-200">
+  <section class="bg-surface-raised border-y border-border">
     <div class="max-w-4xl mx-auto px-4 py-10 text-center">
-      <h2 class="text-lg font-bold text-stone-800 mb-2">Masz pytanie?</h2>
-      <p class="text-sm text-stone-500 mb-4">
-        Napisz do nas na <a href="mailto:kontakt@niejedzie.pl" class="text-orange-500 hover:text-orange-600 underline underline-offset-2">kontakt@niejedzie.pl</a>
+      <h2 class="text-lg font-bold text-ink mb-2">Masz pytanie?</h2>
+      <p class="text-sm text-ink-muted mb-4">
+        Napisz do nas na <a href="mailto:kontakt@niejedzie.pl" class="text-brand-500 hover:text-brand-600 underline underline-offset-2">kontakt@niejedzie.pl</a>
       </p>
-      <a href="/" class="inline-block px-6 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl transition-colors text-sm">
+      <a href="/" class="inline-block px-6 py-2.5 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-xl transition-colors text-sm">
         Sprawdź przesiadkę
       </a>
     </div>
