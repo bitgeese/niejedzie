@@ -5,6 +5,8 @@
 //   every 5 min   — pollDisruptions (active disruptions -> D1 + KV)
 //   0 2 * * *     — aggregateDaily (yesterday's stats -> D1, prune old data)
 
+import { fetchFromScraper } from './scraper';
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -13,6 +15,7 @@ interface Env {
 	DB: D1Database;
 	DELAYS_KV: KVNamespace;
 	PKP_API_KEY: string;
+	DATA_SOURCE?: string; // 'api' | 'scraper' | 'auto'
 }
 
 /** Shape of a single station entry returned by /operations */
@@ -189,42 +192,69 @@ async function batchExecute(
 
 async function pollOperations(env: Env): Promise<void> {
 	const today = todayDateStr();
-	console.log(`[pollOperations] Starting poll for ${today}`);
+	const source = env.DATA_SOURCE || 'auto';
+	console.log(`[pollOperations] Starting poll for ${today} (source: ${source})`);
 
 	// 1. Fetch all current operations (handle pagination)
 	let allTrains: ApiTrain[] = [];
-	let page = 1;
-	const pageSize = 500;
 
-	while (true) {
-		const res = await pkpFetch<OperationsResponse>(
-			"/api/v1/operations",
-			env.PKP_API_KEY,
-			{
-				fullRoutes: "true",
-				withPlanned: "true",
-				pageNumber: String(page),
-				pageSize: String(pageSize),
-			},
-		);
+	// Try official API first (if key available and not forced to scraper)
+	if (source !== 'scraper' && env.PKP_API_KEY) {
+		let page = 1;
+		const pageSize = 500;
 
-		if (!res || !res.success || !res.data?.trains?.length) {
-			if (page === 1) {
-				console.warn("[pollOperations] No data from API on first page");
-				return;
+		while (true) {
+			const res = await pkpFetch<OperationsResponse>(
+				"/api/v1/operations",
+				env.PKP_API_KEY,
+				{
+					fullRoutes: "true",
+					withPlanned: "true",
+					pageNumber: String(page),
+					pageSize: String(pageSize),
+				},
+			);
+
+			if (!res || !res.success || !res.data?.trains?.length) {
+				if (page === 1) {
+					console.warn("[pollOperations] No data from API on first page");
+				}
+				break;
 			}
-			break;
+
+			allTrains = allTrains.concat(res.data.trains);
+
+			// Check if there are more pages
+			const totalPages = res.data.totalPages ?? 1;
+			if (page >= totalPages) break;
+			page++;
 		}
 
-		allTrains = allTrains.concat(res.data.trains);
-
-		// Check if there are more pages
-		const totalPages = res.data.totalPages ?? 1;
-		if (page >= totalPages) break;
-		page++;
+		if (allTrains.length > 0) {
+			console.log(`[pollOperations] Fetched ${allTrains.length} trains from API`);
+		}
 	}
 
-	console.log(`[pollOperations] Fetched ${allTrains.length} trains`);
+	// Fall back to scraper (if API failed/empty or forced to scraper)
+	if (allTrains.length === 0 && source !== 'api') {
+		console.log('[pollOperations] Using Portal Pasażera scraper');
+		try {
+			const scraped = await fetchFromScraper(env);
+			if (scraped && scraped.length > 0) {
+				allTrains = scraped;
+				console.log(`[pollOperations] Fetched ${allTrains.length} trains from scraper`);
+			}
+		} catch (err) {
+			console.error(`[pollOperations] Scraper failed: ${err}`);
+		}
+	}
+
+	if (allTrains.length === 0) {
+		console.warn('[pollOperations] No data from any source');
+		return;
+	}
+
+	console.log(`[pollOperations] Processing ${allTrains.length} trains total`);
 
 	// 2. Write latest snapshot to KV (hot cache for frontend)
 	await env.DELAYS_KV.put(
@@ -947,6 +977,22 @@ export default {
 		if (url.pathname === "/__trigger/aggregate") {
 			ctx.waitUntil(aggregateDaily(env));
 			return Response.json({ triggered: "aggregateDaily" });
+		}
+
+		if (url.pathname === "/__trigger/scraper") {
+			try {
+				const trains = await fetchFromScraper(env);
+				return Response.json({
+					triggered: "scraper",
+					trainCount: trains?.length ?? 0,
+					trains: trains?.slice(0, 10) ?? [], // Preview first 10
+				});
+			} catch (err) {
+				return Response.json(
+					{ error: "scraper failed", message: String(err) },
+					{ status: 500 },
+				);
+			}
 		}
 
 		return new Response("niejedzie-cron worker", { status: 200 });
