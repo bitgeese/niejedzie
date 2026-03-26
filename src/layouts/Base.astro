@@ -6,7 +6,7 @@ interface Props {
   description?: string;
 }
 
-const { title, description = 'Masz przesiadke? Sprawdzimy czy zdazysz. Monitoruj polaczenia PKP w czasie rzeczywistym i dostaniesz alert jesli opoznienie zagrozi Twojej przesiadce.' } = Astro.props;
+const { title, description = 'Masz przesiadkę? Sprawdzimy czy zdążysz. Monitoruj połączenia PKP w czasie rzeczywistym i dostaniesz alert jeśli opóźnienie zagrozi Twojej przesiadce.' } = Astro.props;
 ---
 <!doctype html>
 <html lang="pl">
@@ -27,7 +27,7 @@ const { title, description = 'Masz przesiadke? Sprawdzimy czy zdazysz. Monitoruj
           nie<span class="text-orange-500">jedzie</span><span class="text-stone-400 font-normal">.pl</span>
         </a>
         <div class="flex gap-5 text-sm text-stone-500">
-          <a href="/opoznienia" class="hover:text-stone-800 transition-colors">Opoznienia</a>
+          <a href="/opoznienia" class="hover:text-stone-800 transition-colors">Opóźnienia</a>
           <a href="/statystyki" class="hover:text-stone-800 transition-colors">Statystyki</a>
         </div>
       </nav>
@@ -37,8 +37,8 @@ const { title, description = 'Masz przesiadke? Sprawdzimy czy zdazysz. Monitoruj
     </main>
     <footer class="border-t border-stone-200 bg-white mt-20">
       <div class="max-w-4xl mx-auto px-4 py-6 text-center text-xs text-stone-400">
-        <p>niejedzie.pl &mdash; Monitor przesiadek i opoznien pociagow PKP</p>
-        <p class="mt-1">Dane z Otwartych Danych Kolejowych PKP PLK &middot; Nie jestesmy powiazani z PKP</p>
+        <p>niejedzie.pl &mdash; Monitor przesiadek i opóźnień pociągów PKP</p>
+        <p class="mt-1">Dane z Otwartych Danych Kolejowych PKP PLK &middot; Nie jesteśmy powiązani z PKP</p>
       </div>
     </footer>
   </body>

@@ -1,58 +1,69 @@
 ---
 import Base from '../layouts/Base.astro';
 ---
-<Base title="Monitor przesiadek PKP — dostaniesz alert jesli nie zdazysz">
+<Base title="Monitor przesiadek PKP — dostaniesz alert jeśli nie zdążysz">
 
-  <!-- Hero: straight to the przesiadki form -->
-  <section class="bg-white border-b border-stone-200">
-    <div class="max-w-4xl mx-auto px-4 pt-12 pb-14">
+  <!-- Hero with train photo background -->
+  <section class="relative bg-stone-900 border-b border-stone-200 overflow-hidden">
+    <!-- Background image -->
+    <div class="absolute inset-0">
+      <img
+        src="https://images.unsplash.com/photo-1474487548417-781cb71495f3?w=1400&q=80&auto=format"
+        alt="Peron dworca kolejowego"
+        class="w-full h-full object-cover opacity-30"
+        loading="eager"
+      />
+      <div class="absolute inset-0 bg-gradient-to-b from-stone-900/60 to-stone-900/90"></div>
+    </div>
+
+    <div class="relative max-w-4xl mx-auto px-4 pt-14 pb-16">
       <div class="max-w-xl mx-auto text-center mb-8">
-        <h1 class="text-3xl md:text-4xl font-bold text-stone-900 mb-3">
-          Masz przesiadke?<br/>
-          <span class="text-orange-500">Sprawdzimy czy zdazysz.</span>
+        <h1 class="text-3xl md:text-4xl font-bold text-white mb-3">
+          Masz przesiadkę?<br/>
+          <span class="text-orange-400">Sprawdzimy czy zdążysz.</span>
         </h1>
-        <p class="text-stone-500 text-lg">
-          Monitorujemy Twoj pociag i wyslemy alert jesli opoznienie zagrozi polaczeniu.
+        <p class="text-stone-300 text-lg">
+          Monitorujemy Twój pociąg i wyślemy alert jeśli opóźnienie zagrozi połączeniu.
         </p>
       </div>
 
-      <!-- Przesiadki form — the main CTA -->
-      <div class="max-w-lg mx-auto bg-stone-50 rounded-2xl border border-stone-200 p-6">
+      <!-- Przesiadki form -->
+      <div class="max-w-lg mx-auto bg-white rounded-2xl shadow-xl p-5 md:p-6">
         <form class="space-y-4">
           <div>
-            <label class="block text-xs font-medium text-stone-500 mb-1.5 uppercase tracking-wide">Pociag 1 — skad jedziesz</label>
-            <div class="flex gap-2">
+            <label class="block text-xs font-medium text-stone-500 mb-1.5 uppercase tracking-wide">Pociąg 1 — skąd jedziesz</label>
+            <div class="grid grid-cols-2 gap-2">
               <input
                 type="text"
                 placeholder="np. IC 5313"
-                class="flex-1 px-3.5 py-2.5 bg-white border border-stone-300 rounded-lg text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 transition-all text-sm"
+                class="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-300 rounded-lg text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 transition-all text-sm"
               />
               <input
                 type="text"
                 placeholder="Stacja odjazdu"
-                class="flex-1 px-3.5 py-2.5 bg-white border border-stone-300 rounded-lg text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 transition-all text-sm"
+                class="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-300 rounded-lg text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 transition-all text-sm"
               />
             </div>
           </div>
 
-          <div class="flex items-center gap-3 px-1">
+          <div class="flex items-center gap-3">
             <div class="flex-1 border-t border-dashed border-stone-300"></div>
             <span class="text-xs font-medium text-stone-400 uppercase tracking-wider">Przesiadka</span>
             <div class="flex-1 border-t border-dashed border-stone-300"></div>
           </div>
 
           <div>
-            <label class="block text-xs font-medium text-stone-500 mb-1.5 uppercase tracking-wide">Pociag 2 — dokad jedziesz</label>
-            <div class="flex gap-2">
+            <label class="block text-xs font-medium text-stone-500 mb-1.5 uppercase tracking-wide">Pociąg 2 — dokąd jedziesz</label>
+            <div class="grid grid-cols-2 gap-2">
               <input
                 type="text"
                 placeholder="np. EIC 1701"
-                class="flex-1 px-3.5 py-2.5 bg-white border border-stone-300 rounded-lg text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 transition-all text-sm"
+                class="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-300 rounded-lg text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 transition-all text-sm"
               />
               <input
                 type="text"
                 placeholder="Stacja docelowa"
-                class="flex-1 px-3.5 py-2.5 bg-white border border-stone-300 rounded-lg text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 transition-all text-sm"
+                class="w-full px-3.5 py-2.5 bg-stone-50 border border-stone-300 rounded-lg text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 transition-all text-sm"
               />
             </div>
           </div>
@@ -61,81 +72,81 @@ import Base from '../layouts/Base.astro';
             type="submit"
             class="w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl transition-colors text-sm"
           >
-            Sprawdz przesiadke
+            Sprawdź przesiadkę
           </button>
         </form>
 
         <p class="text-center text-xs text-stone-400 mt-3">
-          Dane z systemu PKP PLK &middot; Aktualizowane co minute
+          Dane z systemu PKP PLK &middot; Aktualizowane co minutę
         </p>
       </div>
     </div>
   </section>
 
-  <!-- How it works — leads to understanding the value -->
+  <!-- How it works -->
   <section class="max-w-4xl mx-auto px-4 py-14">
-    <h2 class="text-center text-sm font-semibold text-stone-400 uppercase tracking-wider mb-10">Jak to dziala</h2>
+    <h2 class="text-center text-sm font-semibold text-stone-400 uppercase tracking-wider mb-10">Jak to działa</h2>
     <div class="grid md:grid-cols-3 gap-8">
       <div class="text-center">
         <div class="w-10 h-10 rounded-full bg-orange-100 text-orange-600 font-bold text-sm flex items-center justify-center mx-auto mb-3">1</div>
-        <h3 class="font-semibold text-stone-800 mb-1.5">Podaj trase</h3>
+        <h3 class="font-semibold text-stone-800 mb-1.5">Podaj trasę</h3>
         <p class="text-stone-500 text-sm">
-          Wpisz numery pociagow i stacje. Pokaz emy Ci czas przesiadki i aktualne opoznienia.
+          Wpisz numery pociągów i stacje. Pokażemy Ci czas przesiadki i aktualne opóźnienia.
         </p>
       </div>
       <div class="text-center">
         <div class="w-10 h-10 rounded-full bg-orange-100 text-orange-600 font-bold text-sm flex items-center justify-center mx-auto mb-3">2</div>
-        <h3 class="font-semibold text-stone-800 mb-1.5">Wlacz monitoring</h3>
+        <h3 class="font-semibold text-stone-800 mb-1.5">Włącz monitoring</h3>
         <p class="text-stone-500 text-sm">
-          Za 5 zl monitorujemy Twoj pociag. Jesli opoznienie zagrozi przesiadce — dostaniesz powiadomienie.
+          Za 5 zł monitorujemy Twój pociąg. Jeśli opóźnienie zagrozi przesiadce — dostaniesz powiadomienie.
         </p>
       </div>
       <div class="text-center">
         <div class="w-10 h-10 rounded-full bg-orange-100 text-orange-600 font-bold text-sm flex items-center justify-center mx-auto mb-3">3</div>
         <h3 class="font-semibold text-stone-800 mb-1.5">Reaguj na czas</h3>
         <p class="text-stone-500 text-sm">
-          Podpowiemy alternatywne polaczenia. Jesli opoznienie przekroczy 60 min — pomozemy zlozyc reklamacje.
+          Podpowiemy alternatywne połączenia. Jeśli opóźnienie przekroczy 60 min — pomożemy złożyć reklamację.
         </p>
       </div>
     </div>
   </section>
 
-  <!-- Social proof: the pain is real -->
+  <!-- Social proof -->
   <section class="bg-white border-y border-stone-200">
     <div class="max-w-4xl mx-auto px-4 py-12">
       <div class="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
         <div>
           <div class="text-2xl font-bold text-stone-900">~73%</div>
-          <div class="text-xs text-stone-400 mt-1">Punktualnosc PKP IC</div>
+          <div class="text-xs text-stone-400 mt-1">Punktualność PKP IC</div>
         </div>
         <div>
           <div class="text-2xl font-bold text-orange-500">1 na 4</div>
-          <div class="text-xs text-stone-400 mt-1">Pociagow sie spoznia</div>
+          <div class="text-xs text-stone-400 mt-1">pociągów się spóźnia</div>
         </div>
         <div>
-          <div class="text-2xl font-bold text-stone-900">78.5M</div>
-          <div class="text-xs text-stone-400 mt-1">Pasazerow rocznie</div>
+          <div class="text-2xl font-bold text-stone-900">78,5M</div>
+          <div class="text-xs text-stone-400 mt-1">pasażerów rocznie</div>
         </div>
         <div>
           <div class="text-2xl font-bold text-stone-900">0</div>
-          <div class="text-xs text-stone-400 mt-1">Narzedzi do monitoringu przesiadek</div>
+          <div class="text-xs text-stone-400 mt-1">narzędzi do monitoringu przesiadek</div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- Example scenario — makes it concrete -->
+  <!-- Example scenario -->
   <section class="max-w-4xl mx-auto px-4 py-14">
-    <h2 class="text-center text-sm font-semibold text-stone-400 uppercase tracking-wider mb-8">Przyklad</h2>
+    <h2 class="text-center text-sm font-semibold text-stone-400 uppercase tracking-wider mb-8">Przykład</h2>
     <div class="max-w-lg mx-auto">
-      <div class="bg-white rounded-2xl border border-stone-200 overflow-hidden">
+      <div class="bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-sm">
         <!-- Train 1 -->
         <div class="p-4 border-b border-stone-100">
           <div class="flex items-center justify-between mb-2">
             <span class="text-sm font-semibold text-stone-700">IC 5313</span>
             <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">+18 min</span>
           </div>
-          <div class="text-xs text-stone-400">Krakow Glowny &rarr; Warszawa Centralna</div>
+          <div class="text-xs text-stone-400">Kraków Główny &rarr; Warszawa Centralna</div>
           <div class="text-xs text-stone-400">Przyjazd: <span class="line-through">13:45</span> <span class="text-amber-600 font-medium">~14:03</span></div>
         </div>
 
@@ -145,7 +156,7 @@ import Base from '../layouts/Base.astro';
             Przesiadka w <span class="font-medium text-stone-700">Warszawa Centralna</span>
           </div>
           <div class="text-xs">
-            <span class="font-semibold text-amber-600">Zostalo 12 min</span>
+            <span class="font-semibold text-amber-600">Zostało 12 min</span>
             <span class="text-stone-400"> z 30 min</span>
           </div>
         </div>
@@ -156,40 +167,40 @@ import Base from '../layouts/Base.astro';
             <span class="text-sm font-semibold text-stone-700">EIC 1701</span>
             <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Punktualnie</span>
           </div>
-          <div class="text-xs text-stone-400">Warszawa Centralna &rarr; Gdansk Glowny</div>
+          <div class="text-xs text-stone-400">Warszawa Centralna &rarr; Gdańsk Główny</div>
           <div class="text-xs text-stone-400">Odjazd: 14:15</div>
         </div>
 
         <!-- CTA -->
         <div class="p-4 bg-orange-50 border-t border-orange-100">
           <button class="w-full py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl transition-colors text-sm">
-            Monitoruj te przesiadke — 5 zl
+            Monitoruj tę przesiadkę — 5 zł
           </button>
           <p class="text-center text-xs text-stone-400 mt-2">
-            Dostaniesz powiadomienie jesli opoznienie sie zwiez. Podpowiemy alternatywy.
+            Dostaniesz powiadomienie jeśli opóźnienie się zwiększy. Podpowiemy alternatywy.
           </p>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- Simple delay check — secondary action -->
+  <!-- Simple delay check — secondary -->
   <section class="bg-white border-y border-stone-200">
     <div class="max-w-4xl mx-auto px-4 py-12">
       <div class="max-w-md mx-auto text-center">
-        <h2 class="text-lg font-semibold text-stone-800 mb-2">Sprawdz opoznienie pociagu</h2>
-        <p class="text-sm text-stone-400 mb-4">Bez przesiadki? Sprawdz czy Twoj pociag jedzie na czas.</p>
+        <h2 class="text-lg font-semibold text-stone-800 mb-2">Sprawdź opóźnienie pociągu</h2>
+        <p class="text-sm text-stone-400 mb-4">Bez przesiadki? Sprawdź czy Twój pociąg jedzie na czas.</p>
         <form class="flex gap-2">
           <input
             type="text"
-            placeholder="Numer pociagu, np. IC 350"
+            placeholder="Numer pociągu, np. IC 350"
             class="flex-1 px-3.5 py-2.5 bg-stone-50 border border-stone-300 rounded-lg text-stone-800 placeholder-stone-400 focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 transition-all text-sm"
           />
           <button
             type="submit"
-            class="px-5 py-2.5 bg-stone-800 hover:bg-stone-700 text-white font-medium rounded-lg transition-colors text-sm"
+            class="px-5 py-2.5 bg-stone-800 hover:bg-stone-700 text-white font-medium rounded-lg transition-colors text-sm shrink-0"
           >
-            Sprawdz
+            Sprawdź
           </button>
         </form>
       </div>
@@ -198,12 +209,12 @@ import Base from '../layouts/Base.astro';
 
   <!-- Bottom CTA -->
   <section class="max-w-4xl mx-auto px-4 py-16 text-center">
-    <h2 class="text-2xl font-bold text-stone-900 mb-3">Nie daj sie zaskoczyc opoznieniem</h2>
+    <h2 class="text-2xl font-bold text-stone-900 mb-3">Nie daj się zaskoczyć opóźnieniem</h2>
     <p class="text-stone-500 mb-6 max-w-md mx-auto">
-      Za 5 zl monitorujemy Twoja przesiadke i damy Ci znac jesli cos pojdzie nie tak.
+      Za 5 zł monitorujemy Twoją przesiadkę i damy Ci znać jeśli coś pójdzie nie tak.
     </p>
     <a href="#top" class="inline-block px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl transition-colors text-sm">
-      Sprawdz przesiadke
+      Sprawdź przesiadkę
     </a>
   </section>
 
