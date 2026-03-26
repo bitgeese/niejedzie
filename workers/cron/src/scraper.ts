@@ -217,12 +217,11 @@ function parseDelaysPage(html: string): ScrapedTrain[] {
  * Parse a single delay row HTML fragment into a ScrapedTrain.
  */
 function parseDelayRow(row: string): ScrapedTrain | null {
-	// Carrier: text after "Przewoźnik</span>" or carrier indicator
-	// Common carriers: IC, TLK, EIC, EIP, KML, KW, REG
-	const carrierMatch = row.match(/Przewo[zź]nik<\/span>\s*(?:<[^>]*>)*\s*([A-ZŁ]{2,4})/i)
-		?? row.match(/class="[^"]*carrier[^"]*"[^>]*>\s*([A-ZŁ]{2,4})/i)
-		?? row.match(/<strong[^>]*>\s*(EIC|EIP|IC|TLK|KML|KW|REG|IR)\s*<\/strong>/i);
-	const carrier = carrierMatch ? carrierMatch[1].trim() : '';
+	// Carrier: bare text between spans, e.g. "</span> IC <span"
+	// The HTML structure is: <span>Przewoźnik</span> IC <span lang="pl-PL">PKP Intercity S.A.</span>
+	const carrierMatch = row.match(/Przewo[zź]nik<\/span>\s*(?:<[^>]*>\s*)*\s*(EIC|EIP|IC|TLK|KML|KW|KS|KD|REG|IR|PolRegio|SKM)\s/i)
+		?? row.match(/<\/span>\s+(EIC|EIP|IC|TLK|KML|KW|KS|KD|REG|IR|PolRegio|SKM)\s+<span/i);
+	const carrier = carrierMatch ? carrierMatch[1].trim().toUpperCase() : '';
 
 	// Train name: <strong class="item-value" lang="pl-PL">TRAIN_NAME</strong>
 	const nameMatch = row.match(/<strong[^>]*class="item-value"[^>]*lang="pl-PL"[^>]*>\s*([^<]+)\s*<\/strong>/);
