@@ -34,7 +34,7 @@ const liveStats = todayData?.stats;
       <!-- Form card -->
       <div class="max-w-lg mx-auto">
         <div class="bg-surface-raised rounded-2xl shadow-2xl overflow-hidden ring-1 ring-white/10">
-          <form class="p-6 space-y-5">
+          <form id="przesiadka-form" class="p-6 space-y-5" action="/wynik">
             <div>
               <label class="section-label text-ink-muted block mb-2.5">Pociąg 1 — skąd jedziesz</label>
               <div class="grid grid-cols-2 gap-2.5">
@@ -362,7 +362,7 @@ const liveStats = todayData?.stats;
       <div class="max-w-md mx-auto text-center">
         <h2 class="text-xl font-bold text-ink mb-2 tracking-tight">Sprawdź opóźnienie pociągu</h2>
         <p class="text-[0.875rem] text-ink-muted mb-5">Bez przesiadki? Sprawdź czy Twój pociąg jedzie na czas.</p>
-        <form class="flex gap-2.5">
+        <form id="delay-check-form" class="flex gap-2.5" action="/gdzie-jest-pociag">
           <input type="text" placeholder="Numer pociągu, np. IC 350" class="input input-mono" />
           <button type="submit" class="btn-secondary shrink-0">Sprawdź</button>
         </form>

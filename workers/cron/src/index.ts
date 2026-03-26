@@ -351,7 +351,48 @@ async function pollOperations(env: Env): Promise<void> {
 		console.log('[pollOperations] GTFS-RT unavailable — using scraper-only punctuality');
 	}
 
-	const todayStats: TodayStats = {
+	// Build topDelayed from scraped trains (sorted by max delay descending, top 10)
+	const topDelayed = allTrains
+		.map((t) => {
+			const maxDelay = Math.max(
+				0,
+				...t.stations.map(
+					(s) => s.arrivalDelayMinutes ?? s.departureDelayMinutes ?? 0,
+				),
+			);
+			return {
+				trainNumber:
+					t.trainNumber || `${t.carrier ?? ''} ${t.scheduleId}`.trim(),
+				delay: maxDelay,
+				route: `${t.routeStartStation ?? '?'} → ${t.routeEndStation ?? '?'}`,
+				station:
+					t.stations[t.stations.length - 1]?.stationName ?? '',
+				carrier: t.carrier ?? '',
+			};
+		})
+		.filter((t) => t.delay > 0)
+		.sort((a, b) => b.delay - a.delay)
+		.slice(0, 10);
+
+	// Fetch active disruptions from KV for inclusion in stats:today
+	let disruptions: Array<{ message: string; route: string }> = [];
+	try {
+		const disruptionsRaw = await env.DELAYS_KV.get(
+			'disruptions:active',
+			'json',
+		) as { disruptions?: Array<{ message: string; startStation: string; endStation: string }> } | null;
+		if (disruptionsRaw?.disruptions) {
+			disruptions = disruptionsRaw.disruptions.map((d) => ({
+				message: d.message,
+				route: `${d.startStation} → ${d.endStation}`,
+			}));
+		}
+	} catch (err) {
+		console.error(`[pollOperations] Failed to fetch disruptions from KV: ${err}`);
+	}
+
+	// Write the full response shape that /api/delays/today expects
+	const todayStats = {
 		timestamp: new Date().toISOString(),
 		totalTrains,
 		avgDelay,
@@ -361,6 +402,9 @@ async function pollOperations(env: Env): Promise<void> {
 		gtfsRtTotalTrains: gtfsRtStats?.totalTrains ?? null,
 		gtfsRtByAgency: gtfsRtStats?.byAgency ?? null,
 		correctedPunctualityPct,
+		topDelayed,
+		disruptions,
+		hourlyDelays: [] as Array<{ hour: string; avgDelay: number }>,
 	};
 
 	await env.DELAYS_KV.put("stats:today", JSON.stringify(todayStats), {

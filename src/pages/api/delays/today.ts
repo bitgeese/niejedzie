@@ -25,6 +25,7 @@ interface TopDelayed {
   delay: number;
   route: string;
   station: string;
+  carrier?: string;
 }
 
 interface DisruptionItem {
