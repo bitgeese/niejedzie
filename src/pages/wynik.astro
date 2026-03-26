@@ -1,0 +1,252 @@
+---
+import Base from '../layouts/Base.astro';
+
+// Mock data — in production this comes from PKP PLK API
+const train1 = {
+  number: 'IC 5313',
+  from: 'Kraków Główny',
+  to: 'Warszawa Centralna',
+  scheduledArrival: '13:45',
+  estimatedArrival: '14:03',
+  delay: 18,
+  status: 'delayed', // 'on-time' | 'delayed' | 'late'
+};
+
+const train2 = {
+  number: 'EIC 1701',
+  from: 'Warszawa Centralna',
+  to: 'Gdańsk Główny',
+  scheduledDeparture: '14:15',
+  estimatedDeparture: '14:15',
+  delay: 0,
+  status: 'on-time',
+};
+
+const transfer = {
+  station: 'Warszawa Centralna',
+  plannedBuffer: 30, // minutes
+  currentBuffer: 12, // minutes after delay
+};
+
+// Buffer percentage for progress bar (inverted — less buffer = more filled/dangerous)
+const bufferUsedPercent = Math.round(((transfer.plannedBuffer - transfer.currentBuffer) / transfer.plannedBuffer) * 100);
+const bufferColor = transfer.currentBuffer > 20 ? 'green' : transfer.currentBuffer > 10 ? 'amber' : 'red';
+---
+<Base title={`${train1.number} → ${train2.number} — przesiadka ${transfer.station}`} description={`Sprawdź przesiadkę ${train1.number} → ${train2.number} w ${transfer.station}. Aktualne opóźnienie: +${train1.delay} min. Monitor przesiadek PKP w czasie rzeczywistym.`}>
+
+  <!-- Result header -->
+  <section class="bg-stone-900 border-b border-stone-200">
+    <div class="max-w-4xl mx-auto px-4 pt-8 pb-10">
+      <div class="max-w-lg mx-auto">
+        <div class="flex items-center gap-2 mb-4">
+          <a href="/" class="text-stone-400 hover:text-white transition-colors text-sm">&larr; Nowa przesiadka</a>
+        </div>
+        <h1 class="text-xl md:text-2xl font-bold text-white mb-1">
+          {train1.number} &rarr; {train2.number}
+        </h1>
+        <p class="text-stone-400 text-sm">
+          {train1.from} &rarr; {train2.to} &middot; Przesiadka w {transfer.station}
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Main result card -->
+  <section class="max-w-4xl mx-auto px-4 -mt-4">
+    <div class="max-w-lg mx-auto">
+      <div class="bg-white rounded-2xl border border-stone-200 overflow-hidden shadow-lg">
+
+        <!-- Train 1 -->
+        <div class="p-5">
+          <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-2.5">
+              <span class="text-sm font-bold text-stone-800">{train1.number}</span>
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">+{train1.delay} min</span>
+            </div>
+            <span class="text-xs text-stone-400">Pociąg 1</span>
+          </div>
+          <div class="text-sm text-stone-600 mb-1">{train1.from} &rarr; {train1.to}</div>
+          <div class="flex items-center gap-3 text-sm">
+            <span class="text-stone-400">Przyjazd:</span>
+            <span class="line-through text-stone-300">{train1.scheduledArrival}</span>
+            <span class="font-semibold text-amber-600">~{train1.estimatedArrival}</span>
+          </div>
+        </div>
+
+        <!-- Transfer time indicator -->
+        <div class="px-5 py-4 bg-stone-50 border-y border-stone-100">
+          <div class="flex items-center justify-between mb-2.5">
+            <div class="text-sm text-stone-600">
+              Przesiadka w <span class="font-semibold text-stone-800">{transfer.station}</span>
+            </div>
+            <div class="text-sm">
+              {bufferColor === 'green' && <span class="font-bold text-green-600">{transfer.currentBuffer} min</span>}
+              {bufferColor === 'amber' && <span class="font-bold text-amber-600">{transfer.currentBuffer} min</span>}
+              {bufferColor === 'red' && <span class="font-bold text-red-600">{transfer.currentBuffer} min</span>}
+              <span class="text-stone-400"> z {transfer.plannedBuffer} min</span>
+            </div>
+          </div>
+
+          <!-- Visual buffer bar -->
+          <div class="relative h-3 bg-stone-200 rounded-full overflow-hidden">
+            <div
+              class:list={[
+                'absolute inset-y-0 left-0 rounded-full transition-all',
+                bufferColor === 'green' && 'bg-green-500',
+                bufferColor === 'amber' && 'bg-amber-500',
+                bufferColor === 'red' && 'bg-red-500',
+              ]}
+              style={`width: ${bufferUsedPercent}%`}
+            ></div>
+          </div>
+          <div class="flex justify-between mt-1.5 text-xs text-stone-400">
+            <span>Bezpiecznie</span>
+            <span>Ryzyko</span>
+          </div>
+
+          <!-- Warning message -->
+          {transfer.currentBuffer <= 15 && transfer.currentBuffer > 5 && (
+            <div class="mt-3 flex items-start gap-2 p-2.5 bg-amber-50 border border-amber-200 rounded-lg">
+              <span class="text-amber-500 text-base leading-none mt-0.5">&#9888;</span>
+              <p class="text-xs text-amber-700">
+                Bufor się zmniejsza. Jeśli opóźnienie wzrośnie do ~{transfer.plannedBuffer} min, nie zdążysz na przesiadkę.
+              </p>
+            </div>
+          )}
+          {transfer.currentBuffer <= 5 && (
+            <div class="mt-3 flex items-start gap-2 p-2.5 bg-red-50 border border-red-200 rounded-lg">
+              <span class="text-red-500 text-base leading-none mt-0.5">&#9888;</span>
+              <p class="text-xs text-red-700">
+                <strong>Przesiadka zagrożona!</strong> Zostało bardzo mało czasu. Rozważ alternatywne połączenie.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <!-- Train 2 -->
+        <div class="p-5">
+          <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center gap-2.5">
+              <span class="text-sm font-bold text-stone-800">{train2.number}</span>
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">Punktualnie</span>
+            </div>
+            <span class="text-xs text-stone-400">Pociąg 2</span>
+          </div>
+          <div class="text-sm text-stone-600 mb-1">{train2.from} &rarr; {train2.to}</div>
+          <div class="flex items-center gap-3 text-sm">
+            <span class="text-stone-400">Odjazd:</span>
+            <span class="font-semibold text-stone-800">{train2.scheduledDeparture}</span>
+          </div>
+        </div>
+
+        <!-- PRIMARY CTA -->
+        <div class="p-5 bg-orange-50 border-t-2 border-orange-400">
+          <h2 class="text-base font-bold text-stone-800 mb-2 text-center">Monitoruj tę przesiadkę</h2>
+          <button class="w-full py-3.5 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl transition-colors text-base shadow-md shadow-orange-500/20">
+            Włącz monitoring — 5 zł
+          </button>
+          <ul class="mt-4 space-y-2">
+            <li class="flex items-start gap-2 text-sm text-stone-600">
+              <span class="text-orange-500 font-bold leading-tight">&#10003;</span>
+              Push powiadomienie gdy opóźnienie się zmieni
+            </li>
+            <li class="flex items-start gap-2 text-sm text-stone-600">
+              <span class="text-orange-500 font-bold leading-tight">&#10003;</span>
+              Propozycje alternatywnych połączeń
+            </li>
+            <li class="flex items-start gap-2 text-sm text-stone-600">
+              <span class="text-orange-500 font-bold leading-tight">&#10003;</span>
+              Sprawdzenie prawa do odszkodowania (60+ min)
+            </li>
+          </ul>
+          <p class="text-center text-xs text-stone-400 mt-3">
+            Jednorazowa płatność &middot; Bez subskrypcji &middot; Monitorujemy do końca podróży
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Historical reliability -->
+  <section class="max-w-4xl mx-auto px-4 py-12">
+    <div class="max-w-lg mx-auto">
+      <h2 class="text-sm font-semibold text-stone-400 uppercase tracking-wider mb-5">Statystyki tej trasy</h2>
+
+      <div class="grid grid-cols-2 gap-3">
+        <div class="bg-white rounded-xl border border-stone-200 p-4">
+          <div class="text-xs text-stone-400 mb-1">Punktualność {train1.number}</div>
+          <div class="text-xl font-bold text-stone-800">64%</div>
+          <div class="text-xs text-stone-400 mt-0.5">ostatnie 30 dni</div>
+        </div>
+        <div class="bg-white rounded-xl border border-stone-200 p-4">
+          <div class="text-xs text-stone-400 mb-1">Średnie opóźnienie</div>
+          <div class="text-xl font-bold text-amber-600">+12 min</div>
+          <div class="text-xs text-stone-400 mt-0.5">na tej trasie</div>
+        </div>
+        <div class="bg-white rounded-xl border border-stone-200 p-4">
+          <div class="text-xs text-stone-400 mb-1">Udane przesiadki</div>
+          <div class="text-xl font-bold text-green-600">82%</div>
+          <div class="text-xs text-stone-400 mt-0.5">z buforem 30 min</div>
+        </div>
+        <div class="bg-white rounded-xl border border-stone-200 p-4">
+          <div class="text-xs text-stone-400 mb-1">Punktualność {train2.number}</div>
+          <div class="text-xl font-bold text-stone-800">89%</div>
+          <div class="text-xs text-stone-400 mt-0.5">ostatnie 30 dni</div>
+        </div>
+      </div>
+
+      <p class="text-xs text-stone-400 mt-3 text-center">
+        Dane historyczne z systemu PKP PLK Otwarte Dane Kolejowe
+      </p>
+    </div>
+  </section>
+
+  <!-- Alternative connections -->
+  <section class="bg-white border-y border-stone-200">
+    <div class="max-w-4xl mx-auto px-4 py-10">
+      <div class="max-w-lg mx-auto">
+        <h2 class="text-sm font-semibold text-stone-400 uppercase tracking-wider mb-5">Następne pociągi do {train2.to.split(' ')[0]}</h2>
+
+        <div class="space-y-2">
+          <div class="flex items-center justify-between p-3 bg-stone-50 rounded-lg border border-stone-200">
+            <div>
+              <span class="text-sm font-semibold text-stone-700">EIC 1703</span>
+              <span class="text-xs text-stone-400 ml-2">15:20 z Warszawa Centralna</span>
+            </div>
+            <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Punktualnie</span>
+          </div>
+          <div class="flex items-center justify-between p-3 bg-stone-50 rounded-lg border border-stone-200">
+            <div>
+              <span class="text-sm font-semibold text-stone-700">TLK 83100</span>
+              <span class="text-xs text-stone-400 ml-2">15:48 z Warszawa Centralna</span>
+            </div>
+            <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">+5 min</span>
+          </div>
+          <div class="flex items-center justify-between p-3 bg-stone-50 rounded-lg border border-stone-200">
+            <div>
+              <span class="text-sm font-semibold text-stone-700">IC 6302</span>
+              <span class="text-xs text-stone-400 ml-2">16:30 z Warszawa Centralna</span>
+            </div>
+            <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Punktualnie</span>
+          </div>
+        </div>
+
+        <p class="text-xs text-stone-400 mt-3">
+          Jeśli nie zdążysz na przesiadkę, te pociągi jadą w tym samym kierunku.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Bottom CTA -->
+  <section class="max-w-4xl mx-auto px-4 py-14 text-center">
+    <h2 class="text-xl font-bold text-stone-900 mb-2">Nie chcesz o tym myśleć?</h2>
+    <p class="text-stone-500 text-sm mb-5 max-w-md mx-auto">
+      Włącz monitoring i zajmij się czymś przyjemniejszym. Damy Ci znać jeśli trzeba będzie reagować.
+    </p>
+    <button class="px-8 py-3 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl transition-colors text-sm shadow-md shadow-orange-500/20">
+      Monitoruj przesiadkę — 5 zł
+    </button>
+  </section>
+
+</Base>
