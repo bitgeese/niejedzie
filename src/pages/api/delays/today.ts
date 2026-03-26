@@ -53,9 +53,21 @@ function emptyResponse(): TodayResponse {
 export const GET: APIRoute = async () => {
   try {
     // ── Fast path: KV cache ──────────────────────────────────────────
-    const cached = await env.DELAYS_KV.get('stats:today', 'json') as TodayResponse | null;
+    const cached = await env.DELAYS_KV.get('stats:today', 'json') as Record<string, any> | null;
     if (cached) {
-      return new Response(JSON.stringify(cached), {
+      // Normalize: prefer corrected punctuality from GTFS-RT when available
+      const normalized: TodayResponse = {
+        stats: {
+          totalTrains: cached.gtfsRtTotalTrains || cached.totalTrains || 0,
+          punctuality: cached.correctedPunctualityPct ?? cached.punctualityPct ?? 0,
+          avgDelay: cached.avgDelay || 0,
+          cancelled: cached.cancelledCount || 0,
+        },
+        hourlyDelays: cached.hourlyDelays || [],
+        topDelayed: cached.topDelayed || [],
+        disruptions: cached.disruptions || [],
+      };
+      return new Response(JSON.stringify(normalized), {
         headers: {
           'Content-Type': 'application/json',
           'Cache-Control': `public, max-age=${CACHE_TTL}`,
