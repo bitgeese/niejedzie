@@ -8,7 +8,6 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig({
   site: 'https://niejedzie.pl',
   adapter: cloudflare(),
-  output: 'static',
 
   vite: {
     plugins: [tailwindcss()]
