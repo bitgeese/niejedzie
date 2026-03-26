@@ -65,24 +65,24 @@ import Base from '../layouts/Base.astro';
   </section>
 
   <!-- How it works -->
-  <section class="max-w-5xl mx-auto px-5 py-24">
+  <section class="max-w-5xl mx-auto px-5 py-24 fade-up">
     <p class="section-label text-center mb-14">// jak to działa</p>
-    <div class="grid md:grid-cols-3 gap-12">
-      <div>
+    <div class="grid md:grid-cols-3 gap-12 stagger">
+      <div class="fade-up">
         <div class="step-number mb-5">01</div>
         <h3 class="text-[1.0625rem] font-bold text-ink mb-2.5 tracking-tight">Podaj trasę</h3>
         <p class="text-ink-muted text-[0.9375rem] leading-relaxed">
           Wpisz numery pociągów i stacje. Pokażemy czas przesiadki i&nbsp;aktualne opóźnienia.
         </p>
       </div>
-      <div>
+      <div class="fade-up">
         <div class="step-number mb-5">02</div>
         <h3 class="text-[1.0625rem] font-bold text-ink mb-2.5 tracking-tight">Włącz monitoring</h3>
         <p class="text-ink-muted text-[0.9375rem] leading-relaxed">
           Za <span class="font-ticket font-semibold text-brand-500">15&nbsp;zł/msc</span> monitorujemy wszystkie Twoje przesiadki. Jeśli opóźnienie zagrozi połączeniu — dostaniesz powiadomienie push.
         </p>
       </div>
-      <div>
+      <div class="fade-up">
         <div class="step-number mb-5">03</div>
         <h3 class="text-[1.0625rem] font-bold text-ink mb-2.5 tracking-tight">Reaguj na czas</h3>
         <p class="text-ink-muted text-[0.9375rem] leading-relaxed">
@@ -93,7 +93,7 @@ import Base from '../layouts/Base.astro';
   </section>
 
   <!-- Stats -->
-  <section class="bg-surface-dark rounded-3xl mx-4 md:mx-8 lg:mx-auto lg:max-w-5xl">
+  <section class="bg-surface-dark rounded-3xl mx-4 md:mx-8 lg:mx-auto lg:max-w-5xl fade-up">
     <div class="px-8 py-12">
       <div class="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
         <div>
@@ -117,7 +117,7 @@ import Base from '../layouts/Base.astro';
   </section>
 
   <!-- Example ticket -->
-  <section class="max-w-5xl mx-auto px-5 py-24">
+  <section class="max-w-5xl mx-auto px-5 py-24 fade-up">
     <p class="section-label text-center mb-12">// przykład na żywo</p>
     <div class="max-w-md mx-auto">
       <div class="ticket-card rounded-2xl overflow-hidden shadow-lg">
@@ -210,7 +210,7 @@ import Base from '../layouts/Base.astro';
   </section>
 
   <!-- Pricing — monthly first and dominant -->
-  <section class="max-w-5xl mx-auto px-5 py-24">
+  <section class="max-w-5xl mx-auto px-5 py-24 fade-up">
     <p class="section-label text-center mb-4">// cennik</p>
     <h2 class="text-[1.75rem] md:text-[2rem] font-extrabold text-ink text-center mb-3 tracking-tight">Spokój za cenę kawy</h2>
     <p class="text-ink-muted text-center mb-14 max-w-md mx-auto">Pełen monitoring przesiadek za 15&nbsp;zł/msc. Albo jednorazowo, jeśli jedziesz raz.</p>
@@ -320,7 +320,7 @@ import Base from '../layouts/Base.astro';
   </section>
 
   <!-- Bottom CTA — subscription nudge -->
-  <section class="max-w-5xl mx-auto px-5 py-24 text-center">
+  <section class="max-w-5xl mx-auto px-5 py-24 text-center fade-up">
     <h2 class="text-[2rem] md:text-[2.5rem] font-extrabold text-ink mb-5 tracking-tight leading-tight">
       Nie daj się zaskoczyć<br/>opóźnieniem
     </h2>
