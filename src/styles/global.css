@@ -1,24 +1,27 @@
 @import "tailwindcss";
 
 @theme {
-  /* Brand palette */
-  --color-brand-50: #fff8f0;
+  --color-brand-50: #fff7ed;
   --color-brand-100: #ffedd5;
-  --color-brand-200: #fdd8a8;
-  --color-brand-400: #f59e0b;
-  --color-brand-500: #ea580c;
-  --color-brand-600: #c2410c;
-  --color-brand-700: #9a3412;
+  --color-brand-200: #fed7aa;
+  --color-brand-300: #fdba74;
+  --color-brand-400: #e67e22;
+  --color-brand-500: #c2410c;
+  --color-brand-600: #9a3412;
+  --color-brand-700: #7c2d12;
 
-  --color-surface: #fafaf8;
+  --color-cream: #fffbf5;
+  --color-cream-dark: #fef2e8;
+
+  --color-surface: #fffbf5;
   --color-surface-raised: #ffffff;
-  --color-surface-sunken: #f3f2ee;
+  --color-surface-sunken: #fef2e8;
   --color-surface-dark: #1c1917;
 
   --color-ink: #1c1917;
+  --color-ink-secondary: #44403c;
   --color-ink-muted: #78716c;
   --color-ink-faint: #a8a29e;
-  --color-ink-on-dark: #fafaf8;
 
   --color-border: #e7e5e0;
   --color-border-strong: #d6d3cd;
@@ -28,22 +31,26 @@
   --color-delay-danger: #dc2626;
 }
 
+/* === Base === */
+
 body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Outfit', system-ui, -apple-system, sans-serif;
   color: var(--color-ink);
   background: var(--color-surface);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Mono font for train data — like ticket printing */
+/* === Mono / ticket font === */
+
 .font-ticket {
   font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', monospace;
   font-feature-settings: 'tnum' 1;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
 }
 
-/* Train ticket card — perforated edge effect */
+/* === Ticket card === */
+
 .ticket-card {
   position: relative;
   background: var(--color-surface-raised);
@@ -72,54 +79,73 @@ body {
 .ticket-divider::before { left: -10px; }
 .ticket-divider::after { right: -10px; }
 
-/* Pill badges */
+/* === Badges === */
+
 .badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 10px;
-  font-size: 0.75rem;
+  padding: 3px 10px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
   font-weight: 600;
-  border-radius: 999px;
+  letter-spacing: 0.02em;
+  border-radius: 6px;
 }
 
 .badge-safe { background: #dcfce7; color: #15803d; }
-.badge-warn { background: #fef3c7; color: #b45309; }
-.badge-danger { background: #fee2e2; color: #b91c1c; }
+.badge-warn { background: #fef3c7; color: #92400e; }
+.badge-danger { background: #fee2e2; color: #991b1b; }
 
-/* CTA button with subtle gradient */
+/* === Buttons === */
+
 .btn-primary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 12px 24px;
+  gap: 8px;
+  padding: 14px 28px;
+  font-family: 'Outfit', system-ui, sans-serif;
   font-weight: 600;
   font-size: 0.9375rem;
+  letter-spacing: -0.01em;
   color: white;
-  background: linear-gradient(135deg, #ea580c 0%, #f97316 100%);
-  border-radius: 12px;
+  background: var(--color-brand-500);
+  border-radius: 14px;
   border: none;
   cursor: pointer;
-  transition: all 0.15s ease;
-  box-shadow: 0 1px 2px rgba(234, 88, 12, 0.2), 0 4px 12px rgba(234, 88, 12, 0.15);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow:
+    0 1px 2px rgba(194, 65, 12, 0.15),
+    0 4px 16px rgba(194, 65, 12, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
 }
 
 .btn-primary:hover {
+  background: var(--color-brand-600);
   transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(234, 88, 12, 0.25), 0 8px 20px rgba(234, 88, 12, 0.2);
+  box-shadow:
+    0 2px 4px rgba(194, 65, 12, 0.2),
+    0 8px 24px rgba(194, 65, 12, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
 }
 
 .btn-secondary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 10px 20px;
+  padding: 11px 20px;
+  font-family: 'Outfit', system-ui, sans-serif;
   font-weight: 500;
   font-size: 0.875rem;
   color: var(--color-ink);
   background: var(--color-surface-raised);
-  border-radius: 10px;
-  border: 1px solid var(--color-border-strong);
+  border-radius: 12px;
+  border: 1.5px solid var(--color-border-strong);
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -129,16 +155,18 @@ body {
   border-color: var(--color-ink-muted);
 }
 
-/* Input styling */
+/* === Inputs === */
+
 .input {
   width: 100%;
-  padding: 10px 14px;
+  padding: 11px 14px;
+  font-family: 'Outfit', system-ui, sans-serif;
   font-size: 0.875rem;
   color: var(--color-ink);
   background: var(--color-surface-raised);
   border: 1.5px solid var(--color-border);
-  border-radius: 10px;
-  transition: all 0.15s ease;
+  border-radius: 12px;
+  transition: all 0.2s ease;
   outline: none;
 }
 
@@ -147,15 +175,79 @@ body {
 }
 
 .input:focus {
-  border-color: var(--color-brand-500);
-  box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.1);
+  border-color: var(--color-brand-400);
+  box-shadow: 0 0 0 3px rgba(194, 65, 12, 0.08);
 }
 
-/* Stat number — large display */
+.input-mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8125rem;
+  letter-spacing: -0.02em;
+}
+
+/* === Stats === */
+
 .stat-value {
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Outfit', system-ui, sans-serif;
   font-weight: 800;
-  font-size: 2rem;
+  font-size: 2.25rem;
   line-height: 1;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.04em;
+}
+
+/* === Section labels === */
+
+.section-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--color-ink-faint);
+}
+
+/* === Step numbers === */
+
+.step-number {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 600;
+  font-size: 0.8125rem;
+  border-radius: 10px;
+  color: var(--color-brand-500);
+  background: var(--color-brand-50);
+  border: 1.5px solid var(--color-brand-200);
+}
+
+/* === Route line === */
+
+.route-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.route-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.route-dash {
+  flex: 1;
+  height: 0;
+  border-top: 1.5px dashed var(--color-border-strong);
+}
+
+.route-duration {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.625rem;
+  color: var(--color-ink-faint);
+  white-space: nowrap;
+  padding: 0 2px;
 }

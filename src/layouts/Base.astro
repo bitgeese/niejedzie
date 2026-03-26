@@ -29,7 +29,7 @@ const fullTitle = `${title} | niejedzie.pl`;
 
     <!-- PWA -->
     <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#ea580c" />
+    <meta name="theme-color" content="#c2410c" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 
@@ -51,7 +51,7 @@ const fullTitle = `${title} | niejedzie.pl`;
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 
     <title>{fullTitle}</title>
 
@@ -84,15 +84,15 @@ const fullTitle = `${title} | niejedzie.pl`;
     })} />
   </head>
   <body>
-    <header class="sticky top-0 z-50 bg-surface-raised/80 backdrop-blur-lg border-b border-border">
-      <nav class="max-w-5xl mx-auto px-5 py-3.5 flex items-center justify-between">
-        <a href="/" class="group flex items-baseline gap-0.5">
-          <span class="text-lg font-bold tracking-tight text-ink">nie</span><span class="text-lg font-bold tracking-tight text-brand-500">jedzie</span><span class="text-sm font-normal text-ink-faint">.pl</span>
+    <header class="sticky top-0 z-50 bg-cream/85 backdrop-blur-xl border-b border-border">
+      <nav class="max-w-5xl mx-auto px-5 h-14 flex items-center justify-between">
+        <a href="/" class="group flex items-baseline">
+          <span class="text-[1.125rem] font-bold tracking-tight text-ink">nie</span><span class="text-[1.125rem] font-bold tracking-tight text-brand-500">jedzie</span><span class="text-sm font-normal text-ink-faint ml-0.5">.pl</span>
         </a>
-        <div class="flex items-center gap-1">
-          <a href="/opoznienia" class="px-3 py-1.5 text-sm text-ink-muted hover:text-ink hover:bg-surface-sunken rounded-lg transition-all">Opóźnienia</a>
-          <a href="/statystyki" class="px-3 py-1.5 text-sm text-ink-muted hover:text-ink hover:bg-surface-sunken rounded-lg transition-all">Statystyki</a>
-          <a href="/o-nas" class="px-3 py-1.5 text-sm text-ink-muted hover:text-ink hover:bg-surface-sunken rounded-lg transition-all">O nas</a>
+        <div class="flex items-center gap-0.5">
+          <a href="/opoznienia" class="px-3 py-1.5 text-[0.8125rem] font-medium text-ink-muted hover:text-ink hover:bg-cream-dark rounded-lg transition-all">Opóźnienia</a>
+          <a href="/statystyki" class="px-3 py-1.5 text-[0.8125rem] font-medium text-ink-muted hover:text-ink hover:bg-cream-dark rounded-lg transition-all">Statystyki</a>
+          <a href="/o-nas" class="px-3 py-1.5 text-[0.8125rem] font-medium text-ink-muted hover:text-ink hover:bg-cream-dark rounded-lg transition-all">O nas</a>
         </div>
       </nav>
     </header>
@@ -100,19 +100,33 @@ const fullTitle = `${title} | niejedzie.pl`;
       <slot />
     </main>
     <footer class="border-t border-border bg-surface-raised mt-24">
-      <div class="max-w-5xl mx-auto px-5 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
-        <div class="flex items-baseline gap-0.5">
-          <span class="font-bold text-ink">nie</span><span class="font-bold text-brand-500">jedzie</span><span class="text-sm text-ink-faint">.pl</span>
+      <div class="max-w-5xl mx-auto px-5 py-10">
+        <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+          <div>
+            <div class="flex items-baseline mb-2">
+              <span class="font-bold text-ink">nie</span><span class="font-bold text-brand-500">jedzie</span><span class="text-sm text-ink-faint ml-0.5">.pl</span>
+            </div>
+            <p class="text-xs text-ink-faint max-w-xs">
+              Monitor przesiadek i opóźnień pociągów PKP. Dane z Otwartych Danych Kolejowych PKP PLK.
+            </p>
+          </div>
+          <div class="flex gap-8 text-[0.8125rem]">
+            <div class="space-y-2">
+              <p class="section-label">Narzędzia</p>
+              <a href="/jak-sprawdzic-opoznienie" class="block text-ink-muted hover:text-ink transition-colors">Poradnik</a>
+              <a href="/odszkodowanie-za-opoznienie" class="block text-ink-muted hover:text-ink transition-colors">Odszkodowanie</a>
+            </div>
+            <div class="space-y-2">
+              <p class="section-label">Informacje</p>
+              <a href="/reklamacja-pkp" class="block text-ink-muted hover:text-ink transition-colors">Reklamacja PKP</a>
+              <a href="/o-nas" class="block text-ink-muted hover:text-ink transition-colors">O nas</a>
+            </div>
+          </div>
         </div>
-        <div class="flex gap-6 text-sm text-ink-faint">
-          <a href="/jak-sprawdzic-opoznienie" class="hover:text-ink transition-colors">Poradnik</a>
-          <a href="/reklamacja-pkp" class="hover:text-ink transition-colors">Reklamacja</a>
-          <a href="/odszkodowanie-za-opoznienie" class="hover:text-ink transition-colors">Odszkodowanie</a>
-          <a href="/o-nas" class="hover:text-ink transition-colors">O nas</a>
+        <div class="mt-8 pt-6 border-t border-border flex items-center justify-between">
+          <p class="text-xs text-ink-faint">Nie jesteśmy powiązani z PKP S.A.</p>
+          <p class="font-ticket text-[0.625rem] text-ink-faint tracking-wider">&copy; 2026 NIEJEDZIE.PL</p>
         </div>
-        <p class="text-xs text-ink-faint">
-          Dane: PKP PLK &middot; Nie jesteśmy powiązani z PKP
-        </p>
       </div>
     </footer>
   </body>

@@ -12,208 +12,206 @@ import Base from '../layouts/Base.astro';
         class="w-full h-full object-cover"
         loading="eager"
       />
-      <div class="absolute inset-0 bg-gradient-to-b from-surface-dark/70 via-surface-dark/80 to-surface-dark/95"></div>
+      <div class="absolute inset-0 bg-gradient-to-b from-surface-dark/60 via-surface-dark/75 to-surface-dark"></div>
     </div>
 
-    <div class="relative max-w-5xl mx-auto px-5 pt-16 pb-20">
-      <div class="max-w-2xl mx-auto text-center mb-10">
-        <p class="font-ticket text-brand-200 text-sm tracking-widest uppercase mb-4">Monitor przesiadek</p>
-        <h1 class="text-4xl md:text-5xl font-extrabold text-white mb-4 tracking-tight leading-[1.1]">
+    <div class="relative max-w-5xl mx-auto px-5 pt-20 pb-24">
+      <div class="max-w-2xl mx-auto text-center mb-12">
+        <p class="section-label text-brand-300 mb-5">// monitor przesiadek</p>
+        <h1 class="text-[2.75rem] md:text-[3.5rem] font-extrabold text-white leading-[1.05] tracking-tight mb-5">
           Masz przesiadkę?<br/>
-          <span class="text-brand-400">Sprawdzimy czy zdążysz.</span>
+          <span class="text-brand-300">Sprawdzimy czy zdążysz.</span>
         </h1>
-        <p class="text-lg text-white/60 max-w-lg mx-auto">
+        <p class="text-[1.0625rem] text-white/50 max-w-md mx-auto leading-relaxed">
           Monitorujemy Twój pociąg i wyślemy alert jeśli opóźnienie zagrozi połączeniu.
         </p>
       </div>
 
-      <!-- Przesiadki form — ticket-style card -->
-      <div class="max-w-lg mx-auto bg-surface-raised rounded-2xl shadow-2xl overflow-hidden">
-        <form class="p-5 md:p-6 space-y-4">
-          <div>
-            <label class="block text-xs font-semibold text-ink-muted mb-2 tracking-wider uppercase">Pociąg 1 — skąd jedziesz</label>
-            <div class="grid grid-cols-2 gap-2">
-              <input type="text" placeholder="np. IC 5313" class="input font-ticket" />
-              <input type="text" placeholder="Stacja odjazdu" class="input" />
+      <!-- Form card -->
+      <div class="max-w-lg mx-auto">
+        <div class="bg-surface-raised rounded-2xl shadow-2xl overflow-hidden ring-1 ring-white/10">
+          <form class="p-6 space-y-5">
+            <div>
+              <label class="section-label text-ink-muted block mb-2.5">Pociąg 1 — skąd jedziesz</label>
+              <div class="grid grid-cols-2 gap-2.5">
+                <input type="text" placeholder="np. IC 5313" class="input input-mono" />
+                <input type="text" placeholder="Stacja odjazdu" class="input" />
+              </div>
             </div>
-          </div>
 
-          <!-- Perforated divider -->
-          <div class="ticket-divider my-5"></div>
+            <div class="ticket-divider my-6"></div>
 
-          <div>
-            <label class="block text-xs font-semibold text-ink-muted mb-2 tracking-wider uppercase">Pociąg 2 — dokąd jedziesz</label>
-            <div class="grid grid-cols-2 gap-2">
-              <input type="text" placeholder="np. EIC 1701" class="input font-ticket" />
-              <input type="text" placeholder="Stacja docelowa" class="input" />
+            <div>
+              <label class="section-label text-ink-muted block mb-2.5">Pociąg 2 — dokąd jedziesz</label>
+              <div class="grid grid-cols-2 gap-2.5">
+                <input type="text" placeholder="np. EIC 1701" class="input input-mono" />
+                <input type="text" placeholder="Stacja docelowa" class="input" />
+              </div>
             </div>
+
+            <button type="submit" class="btn-primary w-full mt-1">
+              Sprawdź przesiadkę
+            </button>
+          </form>
+
+          <div class="px-6 pb-5 text-center">
+            <p class="font-ticket text-[0.625rem] text-ink-faint tracking-wider uppercase">
+              Dane: PKP PLK Otwarte Dane Kolejowe &middot; Odświeżane co 60s
+            </p>
           </div>
-
-          <button type="submit" class="btn-primary w-full mt-2">
-            Sprawdź przesiadkę
-          </button>
-        </form>
-
-        <div class="px-6 pb-4 text-center">
-          <p class="text-xs text-ink-faint">
-            Dane z systemu PKP PLK &middot; Aktualizowane co minutę
-          </p>
         </div>
       </div>
     </div>
   </section>
 
   <!-- How it works -->
-  <section class="max-w-5xl mx-auto px-5 py-20">
-    <p class="text-center text-xs font-semibold text-ink-faint uppercase tracking-[0.2em] mb-12">Jak to działa</p>
-    <div class="grid md:grid-cols-3 gap-10">
+  <section class="max-w-5xl mx-auto px-5 py-24">
+    <p class="section-label text-center mb-14">// jak to działa</p>
+    <div class="grid md:grid-cols-3 gap-12">
       <div>
-        <div class="w-9 h-9 rounded-lg bg-brand-100 text-brand-600 font-bold text-sm flex items-center justify-center mb-4">1</div>
-        <h3 class="font-bold text-ink mb-2">Podaj trasę</h3>
-        <p class="text-ink-muted text-sm leading-relaxed">
-          Wpisz numery pociągów i stacje. Pokażemy Ci czas przesiadki i aktualne opóźnienia.
+        <div class="step-number mb-5">01</div>
+        <h3 class="text-[1.0625rem] font-bold text-ink mb-2.5 tracking-tight">Podaj trasę</h3>
+        <p class="text-ink-muted text-[0.9375rem] leading-relaxed">
+          Wpisz numery pociągów i stacje. Pokażemy czas przesiadki i&nbsp;aktualne opóźnienia.
         </p>
       </div>
       <div>
-        <div class="w-9 h-9 rounded-lg bg-brand-100 text-brand-600 font-bold text-sm flex items-center justify-center mb-4">2</div>
-        <h3 class="font-bold text-ink mb-2">Włącz monitoring — <span class="font-ticket text-brand-500">5 zł</span></h3>
-        <p class="text-ink-muted text-sm leading-relaxed">
-          Monitorujemy Twój pociąg w czasie rzeczywistym. Jeśli opóźnienie zagrozi przesiadce — dostaniesz powiadomienie push.
+        <div class="step-number mb-5">02</div>
+        <h3 class="text-[1.0625rem] font-bold text-ink mb-2.5 tracking-tight">Włącz monitoring</h3>
+        <p class="text-ink-muted text-[0.9375rem] leading-relaxed">
+          Za <span class="font-ticket font-semibold text-brand-500">5&nbsp;zł</span> monitorujemy Twój pociąg. Jeśli opóźnienie zagrozi przesiadce — dostaniesz powiadomienie push.
         </p>
       </div>
       <div>
-        <div class="w-9 h-9 rounded-lg bg-brand-100 text-brand-600 font-bold text-sm flex items-center justify-center mb-4">3</div>
-        <h3 class="font-bold text-ink mb-2">Reaguj na czas</h3>
-        <p class="text-ink-muted text-sm leading-relaxed">
-          Podpowiemy alternatywne połączenia. Jeśli opóźnienie przekroczy 60 min — pomożemy złożyć reklamację.
+        <div class="step-number mb-5">03</div>
+        <h3 class="text-[1.0625rem] font-bold text-ink mb-2.5 tracking-tight">Reaguj na czas</h3>
+        <p class="text-ink-muted text-[0.9375rem] leading-relaxed">
+          Podpowiemy alternatywne połączenia. Jeśli opóźnienie przekroczy 60&nbsp;min — pomożemy złożyć reklamację.
         </p>
       </div>
     </div>
   </section>
 
-  <!-- Stats bar -->
-  <section class="bg-surface-dark">
-    <div class="max-w-5xl mx-auto px-5 py-10">
+  <!-- Stats -->
+  <section class="bg-surface-dark rounded-3xl mx-4 md:mx-8 lg:mx-auto lg:max-w-5xl">
+    <div class="px-8 py-12">
       <div class="grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
         <div>
           <div class="stat-value text-white">~73%</div>
-          <div class="text-xs text-white/40 mt-2 font-ticket uppercase tracking-wider">Punktualność PKP IC</div>
+          <p class="font-ticket text-[0.625rem] text-white/30 mt-3 tracking-wider uppercase">Punktualność PKP IC</p>
         </div>
         <div>
           <div class="stat-value text-brand-400">1 na 4</div>
-          <div class="text-xs text-white/40 mt-2 font-ticket uppercase tracking-wider">Pociągów się spóźnia</div>
+          <p class="font-ticket text-[0.625rem] text-white/30 mt-3 tracking-wider uppercase">Pociągów się spóźnia</p>
         </div>
         <div>
           <div class="stat-value text-white">78,5M</div>
-          <div class="text-xs text-white/40 mt-2 font-ticket uppercase tracking-wider">Pasażerów rocznie</div>
+          <p class="font-ticket text-[0.625rem] text-white/30 mt-3 tracking-wider uppercase">Pasażerów rocznie</p>
         </div>
         <div>
-          <div class="stat-value text-white">0</div>
-          <div class="text-xs text-white/40 mt-2 font-ticket uppercase tracking-wider">Narzędzi do przesiadek</div>
+          <div class="stat-value text-white/40">0</div>
+          <p class="font-ticket text-[0.625rem] text-white/30 mt-3 tracking-wider uppercase">Narzędzi do przesiadek</p>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- Example scenario — ticket card -->
-  <section class="max-w-5xl mx-auto px-5 py-20">
-    <p class="text-center text-xs font-semibold text-ink-faint uppercase tracking-[0.2em] mb-10">Przykład na żywo</p>
+  <!-- Example ticket -->
+  <section class="max-w-5xl mx-auto px-5 py-24">
+    <p class="section-label text-center mb-12">// przykład na żywo</p>
     <div class="max-w-md mx-auto">
       <div class="ticket-card rounded-2xl overflow-hidden shadow-lg">
         <!-- Train 1 -->
-        <div class="p-5">
-          <div class="flex items-center justify-between mb-3">
-            <div class="flex items-center gap-2">
-              <span class="font-ticket font-semibold text-ink text-sm">IC 5313</span>
+        <div class="p-5 pb-4">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2.5">
+              <span class="font-ticket font-semibold text-[0.875rem] text-ink">IC 5313</span>
               <span class="badge badge-warn">+18 min</span>
             </div>
-            <span class="font-ticket text-xs text-ink-faint">26.03.2026</span>
+            <span class="font-ticket text-[0.6875rem] text-ink-faint">26.03.2026</span>
           </div>
-          <div class="flex items-center gap-3 text-sm">
-            <div>
-              <div class="font-ticket font-medium text-ink">13:45</div>
-              <div class="text-xs text-ink-faint">Kraków Gł.</div>
+          <div class="route-line">
+            <div class="text-right min-w-[4.5rem]">
+              <div class="font-ticket font-medium text-[0.875rem] text-ink">11:10</div>
+              <div class="text-[0.6875rem] text-ink-faint">Kraków Gł.</div>
             </div>
-            <div class="flex-1 flex items-center gap-1.5 px-2">
-              <div class="w-1.5 h-1.5 rounded-full bg-brand-500"></div>
-              <div class="flex-1 border-t border-dashed border-ink-faint/30"></div>
-              <div class="text-[10px] text-ink-faint font-ticket">2h 53m</div>
-              <div class="flex-1 border-t border-dashed border-ink-faint/30"></div>
-              <div class="w-1.5 h-1.5 rounded-full bg-ink-faint"></div>
-            </div>
-            <div class="text-right">
-              <div class="font-ticket font-medium text-ink"><span class="line-through text-ink-faint">13:45</span> <span class="text-delay-warn">14:03</span></div>
-              <div class="text-xs text-ink-faint">Warszawa C.</div>
+            <div class="route-dot bg-brand-500"></div>
+            <div class="route-dash"></div>
+            <div class="route-duration">2h 53m</div>
+            <div class="route-dash"></div>
+            <div class="route-dot bg-ink-faint"></div>
+            <div class="min-w-[4.5rem]">
+              <div class="font-ticket font-medium text-[0.875rem] text-ink">
+                <span class="line-through text-ink-faint decoration-ink-faint/50">13:45</span>
+                <span class="text-delay-warn ml-1">14:03</span>
+              </div>
+              <div class="text-[0.6875rem] text-ink-faint">Warszawa C.</div>
             </div>
           </div>
         </div>
 
-        <!-- Perforated transfer divider -->
+        <!-- Transfer -->
         <div class="ticket-divider"></div>
-
-        <!-- Transfer info -->
-        <div class="px-5 py-3 bg-surface-sunken flex items-center justify-between">
-          <div class="text-xs text-ink-muted">
-            Przesiadka: <span class="font-semibold text-ink">Warszawa Centralna</span>
-          </div>
-          <div class="font-ticket text-xs">
-            <span class="font-semibold text-delay-warn">12 min</span>
-            <span class="text-ink-faint"> / 30 min</span>
+        <div class="px-5 py-3.5 bg-surface-sunken">
+          <div class="flex items-center justify-between">
+            <div class="text-[0.8125rem] text-ink-muted">
+              Przesiadka: <span class="font-semibold text-ink">Warszawa Centralna</span>
+            </div>
+            <div class="font-ticket text-[0.75rem]">
+              <span class="font-semibold text-delay-warn">12 min</span>
+              <span class="text-ink-faint"> / 30</span>
+            </div>
           </div>
         </div>
-
-        <!-- Perforated divider -->
         <div class="ticket-divider"></div>
 
         <!-- Train 2 -->
-        <div class="p-5">
-          <div class="flex items-center justify-between mb-3">
-            <div class="flex items-center gap-2">
-              <span class="font-ticket font-semibold text-ink text-sm">EIC 1701</span>
+        <div class="p-5 pb-4">
+          <div class="flex items-center justify-between mb-4">
+            <div class="flex items-center gap-2.5">
+              <span class="font-ticket font-semibold text-[0.875rem] text-ink">EIC 1701</span>
               <span class="badge badge-safe">Punktualnie</span>
             </div>
-            <span class="font-ticket text-xs text-ink-faint">26.03.2026</span>
+            <span class="font-ticket text-[0.6875rem] text-ink-faint">26.03.2026</span>
           </div>
-          <div class="flex items-center gap-3 text-sm">
-            <div>
-              <div class="font-ticket font-medium text-ink">14:15</div>
-              <div class="text-xs text-ink-faint">Warszawa C.</div>
+          <div class="route-line">
+            <div class="text-right min-w-[4.5rem]">
+              <div class="font-ticket font-medium text-[0.875rem] text-ink">14:15</div>
+              <div class="text-[0.6875rem] text-ink-faint">Warszawa C.</div>
             </div>
-            <div class="flex-1 flex items-center gap-1.5 px-2">
-              <div class="w-1.5 h-1.5 rounded-full bg-delay-safe"></div>
-              <div class="flex-1 border-t border-dashed border-ink-faint/30"></div>
-              <div class="text-[10px] text-ink-faint font-ticket">3h 21m</div>
-              <div class="flex-1 border-t border-dashed border-ink-faint/30"></div>
-              <div class="w-1.5 h-1.5 rounded-full bg-ink-faint"></div>
-            </div>
-            <div class="text-right">
-              <div class="font-ticket font-medium text-ink">17:36</div>
-              <div class="text-xs text-ink-faint">Gdańsk Gł.</div>
+            <div class="route-dot bg-delay-safe"></div>
+            <div class="route-dash"></div>
+            <div class="route-duration">3h 21m</div>
+            <div class="route-dash"></div>
+            <div class="route-dot bg-ink-faint"></div>
+            <div class="min-w-[4.5rem]">
+              <div class="font-ticket font-medium text-[0.875rem] text-ink">17:36</div>
+              <div class="text-[0.6875rem] text-ink-faint">Gdańsk Gł.</div>
             </div>
           </div>
         </div>
 
         <!-- CTA -->
-        <div class="p-5 bg-gradient-to-b from-brand-50 to-brand-100/50 border-t border-brand-200">
+        <div class="p-5 bg-brand-50 border-t border-brand-200">
           <button class="btn-primary w-full">
             Monitoruj tę przesiadkę — 5 zł
           </button>
-          <p class="text-center text-xs text-ink-muted mt-3">
-            Powiadomienie push + alternatywne połączenia + sprawdzenie odszkodowania
+          <p class="text-center text-[0.75rem] text-ink-muted mt-3">
+            Powiadomienie push &middot; Alternatywne połączenia &middot; Sprawdzenie odszkodowania
           </p>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- Simple delay check -->
+  <!-- Delay check -->
   <section class="border-t border-border bg-surface-raised">
-    <div class="max-w-5xl mx-auto px-5 py-14">
+    <div class="max-w-5xl mx-auto px-5 py-16">
       <div class="max-w-md mx-auto text-center">
-        <h2 class="text-xl font-bold text-ink mb-2">Sprawdź opóźnienie pociągu</h2>
-        <p class="text-sm text-ink-muted mb-5">Bez przesiadki? Sprawdź czy Twój pociąg jedzie na czas.</p>
-        <form class="flex gap-2">
-          <input type="text" placeholder="Numer pociągu, np. IC 350" class="input font-ticket" />
+        <h2 class="text-xl font-bold text-ink mb-2 tracking-tight">Sprawdź opóźnienie pociągu</h2>
+        <p class="text-[0.875rem] text-ink-muted mb-5">Bez przesiadki? Sprawdź czy Twój pociąg jedzie na czas.</p>
+        <form class="flex gap-2.5">
+          <input type="text" placeholder="Numer pociągu, np. IC 350" class="input input-mono" />
           <button type="submit" class="btn-secondary shrink-0">Sprawdź</button>
         </form>
       </div>
@@ -221,13 +219,15 @@ import Base from '../layouts/Base.astro';
   </section>
 
   <!-- Bottom CTA -->
-  <section class="max-w-5xl mx-auto px-5 py-20 text-center">
-    <h2 class="text-3xl font-extrabold text-ink mb-4 tracking-tight">Nie daj się zaskoczyć opóźnieniem</h2>
-    <p class="text-ink-muted mb-8 max-w-md mx-auto leading-relaxed">
-      Za <span class="font-ticket font-semibold text-brand-500">5 zł</span> monitorujemy Twoją przesiadkę i damy Ci znać jeśli coś pójdzie nie tak.
+  <section class="max-w-5xl mx-auto px-5 py-24 text-center">
+    <h2 class="text-[2rem] md:text-[2.5rem] font-extrabold text-ink mb-5 tracking-tight leading-tight">
+      Nie daj się zaskoczyć<br/>opóźnieniem
+    </h2>
+    <p class="text-ink-muted mb-8 max-w-md mx-auto text-[1.0625rem] leading-relaxed">
+      Za <span class="font-ticket font-semibold text-brand-500">5&nbsp;zł</span> monitorujemy Twoją przesiadkę i&nbsp;damy Ci znać jeśli coś pójdzie nie tak.
     </p>
     <a href="#top" class="btn-primary">
-      Sprawdź przesiadkę
+      Sprawdź swoją przesiadkę
     </a>
   </section>
 
