@@ -29,7 +29,7 @@ const fullTitle = `${title} | niejedzie.pl`;
 
     <!-- PWA -->
     <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#f97316" />
+    <meta name="theme-color" content="#ea580c" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 
@@ -51,7 +51,7 @@ const fullTitle = `${title} | niejedzie.pl`;
     <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 
     <title>{fullTitle}</title>
 
@@ -83,27 +83,36 @@ const fullTitle = `${title} | niejedzie.pl`;
       }
     })} />
   </head>
-  <body class="min-h-screen bg-stone-50 text-stone-800 font-sans">
-    <header class="bg-white border-b border-stone-200">
-      <nav class="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
-        <a href="/" class="text-lg font-bold text-stone-900 hover:text-orange-600 transition-colors">
-          nie<span class="text-orange-500">jedzie</span><span class="text-stone-400 font-normal">.pl</span>
+  <body>
+    <header class="sticky top-0 z-50 bg-surface-raised/80 backdrop-blur-lg border-b border-border">
+      <nav class="max-w-5xl mx-auto px-5 py-3.5 flex items-center justify-between">
+        <a href="/" class="group flex items-baseline gap-0.5">
+          <span class="text-lg font-bold tracking-tight text-ink">nie</span><span class="text-lg font-bold tracking-tight text-brand-500">jedzie</span><span class="text-sm font-normal text-ink-faint">.pl</span>
         </a>
-        <div class="flex gap-5 text-sm text-stone-500">
-          <a href="/opoznienia" class="hover:text-stone-800 transition-colors">Opóźnienia</a>
-          <a href="/statystyki" class="hover:text-stone-800 transition-colors">Statystyki</a>
-          <a href="/o-nas" class="hover:text-stone-800 transition-colors">O nas</a>
+        <div class="flex items-center gap-1">
+          <a href="/opoznienia" class="px-3 py-1.5 text-sm text-ink-muted hover:text-ink hover:bg-surface-sunken rounded-lg transition-all">Opóźnienia</a>
+          <a href="/statystyki" class="px-3 py-1.5 text-sm text-ink-muted hover:text-ink hover:bg-surface-sunken rounded-lg transition-all">Statystyki</a>
+          <a href="/o-nas" class="px-3 py-1.5 text-sm text-ink-muted hover:text-ink hover:bg-surface-sunken rounded-lg transition-all">O nas</a>
         </div>
       </nav>
     </header>
     <main>
       <slot />
     </main>
-    <footer class="border-t border-stone-200 bg-white mt-20">
-      <div class="max-w-4xl mx-auto px-4 py-6 text-center text-xs text-stone-400">
-        <p>niejedzie.pl &mdash; Monitor przesiadek i opóźnień pociągów PKP</p>
-        <p class="mt-1">Dane z Otwartych Danych Kolejowych PKP PLK &middot; Nie jesteśmy powiązani z PKP</p>
-        <p class="mt-1"><a href="/o-nas" class="hover:text-stone-600 transition-colors">O nas</a></p>
+    <footer class="border-t border-border bg-surface-raised mt-24">
+      <div class="max-w-5xl mx-auto px-5 py-8 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div class="flex items-baseline gap-0.5">
+          <span class="font-bold text-ink">nie</span><span class="font-bold text-brand-500">jedzie</span><span class="text-sm text-ink-faint">.pl</span>
+        </div>
+        <div class="flex gap-6 text-sm text-ink-faint">
+          <a href="/jak-sprawdzic-opoznienie" class="hover:text-ink transition-colors">Poradnik</a>
+          <a href="/reklamacja-pkp" class="hover:text-ink transition-colors">Reklamacja</a>
+          <a href="/odszkodowanie-za-opoznienie" class="hover:text-ink transition-colors">Odszkodowanie</a>
+          <a href="/o-nas" class="hover:text-ink transition-colors">O nas</a>
+        </div>
+        <p class="text-xs text-ink-faint">
+          Dane: PKP PLK &middot; Nie jesteśmy powiązani z PKP
+        </p>
       </div>
     </footer>
   </body>
