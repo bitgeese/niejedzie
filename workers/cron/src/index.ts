@@ -7,6 +7,7 @@
 
 import { fetchFromScraper } from './scraper';
 import { fetchGtfsRtStats, type GtfsRtStats } from './gtfs-rt';
+import { loadStations } from './gtfs-static';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1032,9 +1033,14 @@ export default {
 
 			case "0 2 * * *":
 				ctx.waitUntil(
-					aggregateDaily(env).catch((err) =>
-						console.error(`[aggregateDaily] Fatal: ${err}`),
-					),
+					(async () => {
+						await aggregateDaily(env).catch((err) =>
+							console.error(`[aggregateDaily] Fatal: ${err}`),
+						);
+						await loadStations(env).catch((err) =>
+							console.error(`[loadStations] Fatal: ${err}`),
+						);
+					})(),
 				);
 				break;
 
@@ -1097,6 +1103,21 @@ export default {
 			} catch (err) {
 				return Response.json(
 					{ error: "gtfs-rt failed", message: String(err) },
+					{ status: 500 },
+				);
+			}
+		}
+
+		if (url.pathname === "/__trigger/load-stations") {
+			try {
+				const count = await loadStations(env);
+				return Response.json({
+					triggered: "loadStations",
+					stationsLoaded: count,
+				});
+			} catch (err) {
+				return Response.json(
+					{ error: "loadStations failed", message: String(err) },
 					{ status: 500 },
 				);
 			}

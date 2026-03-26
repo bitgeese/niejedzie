@@ -370,7 +370,10 @@ function timeToIsoString(timeStr: string): string | null {
  * Returns an array of ApiStation objects, or null if parsing fails.
  */
 async function scrapeTrainDetail(session: ScrapingSession, detailUrl: string): Promise<ApiStation[] | null> {
-	const fullUrl = `${PORTAL_BASE}${detailUrl}`;
+	// Handle both absolute and relative detail URLs from the list page HTML
+	const fullUrl = detailUrl.startsWith('http')
+		? detailUrl
+		: `${PORTAL_BASE}${detailUrl.startsWith('/') ? '' : '/'}${detailUrl}`;
 
 	const res = await fetch(fullUrl, {
 		headers: {
@@ -379,8 +382,16 @@ async function scrapeTrainDetail(session: ScrapingSession, detailUrl: string): P
 			'Accept-Language': 'pl-PL,pl;q=0.9',
 			'Cookie': buildCookieHeader(session),
 		},
-		redirect: 'follow',
+		redirect: 'manual',
 	});
+
+	// Detect redirects — a 302 typically means the pid is invalid
+	// (session mismatch or expired page context)
+	if (res.status >= 300 && res.status < 400) {
+		const location = res.headers.get('location') || '';
+		console.warn(`[scraper:detail] Redirect ${res.status} → ${location} for ${detailUrl.substring(0, 80)} (likely stale pid/session)`);
+		return null;
+	}
 
 	if (!res.ok) {
 		console.warn(`[scraper:detail] Fetch failed: ${res.status} for ${detailUrl.substring(0, 80)}`);
@@ -388,6 +399,14 @@ async function scrapeTrainDetail(session: ScrapingSession, detailUrl: string): P
 	}
 
 	const html = await res.text();
+
+	// Sanity check: if the response is a homepage or non-detail page,
+	// it won't contain timeline station blocks. Log the page size for debugging.
+	if (!html.includes('timeline__content-station') && !html.includes('SzczegolyPolaczenia')) {
+		console.warn(`[scraper:detail] Response doesn't look like a detail page (${html.length} bytes) for ${detailUrl.substring(0, 80)}`);
+		return null;
+	}
+
 	return parseTrainDetailPage(html);
 }
 
@@ -522,8 +541,44 @@ function parseTrainDetailPage(html: string): ApiStation[] | null {
 // ---------------------------------------------------------------------------
 
 /**
+ * Update session cookies from a fetch response.
+ * The server may rotate or add cookies on any response (especially the list page).
+ * We need to capture these so that subsequent detail page fetches use the same
+ * session context that generated the `pid` tokens in the detail URLs.
+ */
+function updateSessionFromResponse(session: ScrapingSession, res: Response): void {
+	const setCookieHeaders: string[] = [];
+	res.headers.forEach((value, key) => {
+		if (key.toLowerCase() === 'set-cookie') {
+			setCookieHeaders.push(value);
+		}
+	});
+
+	if (setCookieHeaders.length === 0) return;
+
+	const cookieStr = setCookieHeaders.join('; ');
+
+	const sessionIdMatch = cookieStr.match(/ASP\.NET_SessionId=([^;]+)/);
+	if (sessionIdMatch) {
+		const oldId = session.sessionId.substring(0, 8);
+		session.sessionId = sessionIdMatch[1];
+		console.log(`[scraper] Session cookie rotated: ${oldId}... → ${session.sessionId.substring(0, 8)}...`);
+	}
+
+	const verificationMatch = cookieStr.match(/__RequestVerificationToken=([^;]+)/);
+	if (verificationMatch) {
+		session.verificationCookie = verificationMatch[1];
+	}
+}
+
+/**
  * Fetch all currently delayed trains from Portal Pasażera.
  * Handles pagination by fetching subsequent pages until exhausted.
+ *
+ * IMPORTANT: This function mutates the session object to capture any
+ * rotated cookies from the list page responses. The updated session
+ * must be used for subsequent detail page fetches so that the `pid`
+ * tokens in detail URLs are recognized by the server.
  */
 async function scrapeCurrentDelays(session: ScrapingSession): Promise<ScrapedTrain[]> {
 	const allTrains: ScrapedTrain[] = [];
@@ -554,6 +609,12 @@ async function scrapeCurrentDelays(session: ScrapingSession): Promise<ScrapedTra
 			console.warn(`[scraper] Page ${page} fetch failed: ${res.status}`);
 			break;
 		}
+
+		// Capture any rotated session cookies from the response.
+		// The detail URLs (pid tokens) in the HTML body are tied to the
+		// server-side session state after this response — we need the
+		// matching cookies for detail page fetches to work.
+		updateSessionFromResponse(session, res);
 
 		const html = await res.text();
 		const trains = parseDelaysPage(html);
@@ -695,6 +756,8 @@ async function fetchTrainDetails(
 	// Only fetch details for trains that have a detail URL
 	const trainsWithDetails = scraped.filter((t) => t.detailUrl !== null);
 
+	console.log(`[scraper:detail] ${trainsWithDetails.length} of ${scraped.length} trains have detail URLs`);
+
 	// Sort by delay descending — prioritize the most delayed trains
 	trainsWithDetails.sort((a, b) => b.delayMinutes - a.delayMinutes);
 
@@ -702,7 +765,7 @@ async function fetchTrainDetails(
 	const toFetch = trainsWithDetails.slice(0, MAX_DETAIL_PAGES_PER_CYCLE);
 
 	if (toFetch.length === 0) {
-		console.log('[scraper:detail] No trains have detail URLs');
+		console.log('[scraper:detail] No trains have detail URLs — detail page enrichment skipped');
 		return detailMap;
 	}
 
@@ -749,13 +812,27 @@ export async function fetchFromScraper(env: Env): Promise<ApiTrain[] | null> {
 	try {
 		console.log('[scraper] Starting Portal Pasażera scrape');
 
-		const session = await getOrRefreshSession(env.DELAYS_KV);
+		// Always create a fresh session for each scrape cycle.
+		// Detail page URLs contain `pid` tokens that are tied to the server-side
+		// session state at the time the list page was rendered. A stale KV-cached
+		// session from a previous cron cycle will have a different session context,
+		// causing detail page fetches to fail with redirects.
+		const session = await initSession(env.DELAYS_KV);
+
+		// scrapeCurrentDelays mutates session in-place to capture any cookie
+		// rotations from the list page response — this ensures fetchTrainDetails
+		// uses cookies that match the pid tokens in the detail URLs.
 		const scraped = await scrapeCurrentDelays(session);
 
 		if (scraped.length === 0) {
 			console.warn('[scraper] No delayed trains found');
 			return [];
 		}
+
+		// Update KV with the (potentially rotated) session so that if
+		// initSession fails on the next cycle, getOrRefreshSession has
+		// a reasonably fresh fallback.
+		await env.DELAYS_KV.put(SESSION_KV_KEY, JSON.stringify(session), { expirationTtl: SESSION_TTL });
 
 		// Fetch per-station detail pages for top trains
 		const detailMap = await fetchTrainDetails(session, scraped);
