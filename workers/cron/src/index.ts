@@ -5,7 +5,7 @@
 //   every 5 min   — pollDisruptions (active disruptions -> D1 + KV)
 //   0 2 * * *     — aggregateDaily (yesterday's stats -> D1, prune old data)
 
-import { fetchFromScraper } from './scraper';
+import { fetchFromScraper, scrapePortalStats, type PortalStats } from './scraper';
 import { fetchGtfsRtStats, type GtfsRtStats } from './gtfs-rt';
 import { loadStations } from './gtfs-static';
 
@@ -275,11 +275,16 @@ async function pollOperations(env: Env): Promise<void> {
 		{ expirationTtl: 180 },
 	);
 
-	// 3. Fetch GTFS-RT stats in parallel with stats computation
-	//    This gives us the real total train count across all operators.
+	// 3. Fetch GTFS-RT stats + Portal stats in parallel with stats computation
+	//    GTFS-RT gives us the real total train count across all operators.
+	//    Portal stats (s=1) gives us the REAL punctuality percentages.
 	const gtfsRtPromise = fetchGtfsRtStats(env).catch((err) => {
 		console.error(`[pollOperations] GTFS-RT fetch failed: ${err}`);
 		return null as GtfsRtStats | null;
+	});
+	const portalStatsPromise = scrapePortalStats().catch((err) => {
+		console.error(`[pollOperations] Portal stats fetch failed: ${err}`);
+		return null as PortalStats | null;
 	});
 
 	// 4. Compute summary stats from scraped/API delay data
@@ -323,8 +328,9 @@ async function pollOperations(env: Env): Promise<void> {
 			? Math.round((onTimeCount / totalTrains) * 1000) / 10
 			: 0;
 
-	// 5. Await GTFS-RT stats and compute corrected punctuality
+	// 5. Await GTFS-RT stats + Portal stats and compute corrected punctuality
 	const gtfsRtStats = await gtfsRtPromise;
+	const portalStats = await portalStatsPromise;
 
 	// Corrected punctuality: uses GTFS-RT total as denominator.
 	// The scraper/API only returns DELAYED trains, so totalTrains from scraper
@@ -403,6 +409,11 @@ async function pollOperations(env: Env): Promise<void> {
 		gtfsRtTotalTrains: gtfsRtStats?.totalTrains ?? null,
 		gtfsRtByAgency: gtfsRtStats?.byAgency ?? null,
 		correctedPunctualityPct,
+		// Portal Pasażera REAL punctuality stats (from s=1 page)
+		portalPunctualityOnRoute: portalStats?.onRoute ?? null,
+		portalPunctualityDeparted: portalStats?.departed ?? null,
+		portalPunctualityCompleted: portalStats?.completed ?? null,
+		portalTrainsStartedPct: portalStats?.startedPct ?? null,
 		topDelayed,
 		disruptions,
 		hourlyDelays: [] as Array<{ hour: string; avgDelay: number }>,

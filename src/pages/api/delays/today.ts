@@ -56,11 +56,14 @@ export const GET: APIRoute = async () => {
     // ── Fast path: KV cache ──────────────────────────────────────────
     const cached = await env.DELAYS_KV.get('stats:today', 'json') as Record<string, any> | null;
     if (cached) {
-      // Normalize: prefer corrected punctuality from GTFS-RT when available
+      // Normalize: prefer Portal Pasażera real punctuality > GTFS-RT corrected > scraper-only
       const normalized: TodayResponse = {
         stats: {
           totalTrains: cached.gtfsRtTotalTrains || cached.totalTrains || 0,
-          punctuality: cached.correctedPunctualityPct ?? cached.punctualityPct ?? 0,
+          punctuality: cached.portalPunctualityOnRoute
+            ?? cached.correctedPunctualityPct
+            ?? cached.punctualityPct
+            ?? 0,
           avgDelay: cached.avgDelay || 0,
           cancelled: cached.cancelledCount || 0,
         },

@@ -60,6 +60,14 @@ interface Env {
 	DATA_SOURCE?: string;
 }
 
+/** Real-time punctuality stats from Portal Pasażera s=1 page */
+export interface PortalStats {
+	onRoute: number | null;      // % of trains on route that are on time
+	departed: number | null;     // % of trains that departed on time
+	completed: number | null;    // % of completed trains that were on time
+	startedPct: number | null;   // % of scheduled trains that have actually started
+}
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
@@ -843,6 +851,58 @@ export async function fetchFromScraper(env: Env): Promise<ApiTrain[] | null> {
 		return trains;
 	} catch (err) {
 		console.error(`[scraper] Fatal error: ${err}`);
+		return null;
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Portal stats scraping (s=1 page — real punctuality data)
+// ---------------------------------------------------------------------------
+
+function extractStatVar(html: string, varName: string): number | null {
+	const match = html.match(new RegExp(`${varName}\\s*=\\s*([0-9.]+)`));
+	return match ? parseFloat(match[1]) : null;
+}
+
+/**
+ * Scrape real-time punctuality statistics from Portal Pasażera.
+ *
+ * The s=1 page embeds these JS variables directly in the HTML:
+ * - ProcPunktualnoscNaTrasie: % of trains currently on route that are on time
+ * - ProcPunktualnoscUruchomien: % of trains that departed on time
+ * - ProcPunktualnoscZakonczen: % of completed trains that were on time
+ * - ProcUruchomien: % of scheduled trains that have actually started
+ *
+ * No session or CSRF tokens needed — simple GET request.
+ */
+export async function scrapePortalStats(): Promise<PortalStats | null> {
+	try {
+		const res = await fetch(`${PORTAL_BASE}/Opoznienia/Index?s=1`, {
+			headers: {
+				'User-Agent': USER_AGENT,
+				'Accept': 'text/html',
+			},
+		});
+
+		if (!res.ok) {
+			console.warn(`[scraper:stats] Failed to fetch s=1: ${res.status}`);
+			return null;
+		}
+
+		const html = await res.text();
+
+		const stats: PortalStats = {
+			onRoute: extractStatVar(html, 'ProcPunktualnoscNaTrasie'),
+			departed: extractStatVar(html, 'ProcPunktualnoscUruchomien'),
+			completed: extractStatVar(html, 'ProcPunktualnoscZakonczen'),
+			startedPct: extractStatVar(html, 'ProcUruchomien'),
+		};
+
+		console.log(`[scraper:stats] Portal stats: onRoute=${stats.onRoute}%, departed=${stats.departed}%, completed=${stats.completed}%, started=${stats.startedPct}%`);
+
+		return stats;
+	} catch (err) {
+		console.error(`[scraper:stats] Error: ${err}`);
 		return null;
 	}
 }
