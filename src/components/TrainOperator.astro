@@ -1,0 +1,95 @@
+---
+import { TRAIN_OPERATORS, type OperatorCode } from '../lib/constants';
+
+interface Props {
+  trainNumber: string;
+  carrier?: string;
+  showIcon?: boolean;
+  iconSize?: 'sm' | 'md' | 'lg';
+}
+
+const { trainNumber, carrier, showIcon = true, iconSize = 'md' } = Astro.props;
+
+// Extract operator code from carrier name or train number
+function getOperatorCode(trainNumber: string, carrier?: string): OperatorCode | null {
+  // Try to extract from carrier name first
+  if (carrier) {
+    const carrierLower = carrier.toLowerCase();
+    if (carrierLower.includes('intercity')) return 'IC';
+    if (carrierLower.includes('polregio')) return 'PR';
+    if (carrierLower.includes('mazowieckie')) return 'KM';
+    if (carrierLower.includes('skm') && carrierLower.includes('trójmiasto')) return 'SKM';
+    if (carrierLower.includes('skm') && carrierLower.includes('warszawa')) return 'SKMT';
+    if (carrierLower.includes('dolnośląskie')) return 'KD';
+    if (carrierLower.includes('śląskie')) return 'KS';
+    if (carrierLower.includes('wielkopolskie')) return 'KW';
+    if (carrierLower.includes('łódzka')) return 'LKA';
+    if (carrierLower.includes('małopolskie')) return 'KML';
+    if (carrierLower.includes('arriva')) return 'AR';
+    if (carrierLower.includes('regiojet')) return 'RJ';
+    if (carrierLower.includes('leo express')) return 'LEO';
+    if (carrierLower.includes('wkd')) return 'WKD';
+  }
+
+  // Try to extract from train number prefix and numbering patterns
+  if (trainNumber) {
+    const upperTrain = trainNumber.toUpperCase();
+    const trainNum = parseInt(trainNumber.replace(/\D/g, ''));
+
+    // Explicit prefixes first
+    if (upperTrain.startsWith('IC ') || upperTrain.startsWith('EIC ') || upperTrain.startsWith('EIP ') || upperTrain.startsWith('TLK ')) return 'IC';
+    if (upperTrain.startsWith('R ') || upperTrain.startsWith('REG ')) return 'PR';
+    if (upperTrain.startsWith('KM ')) return 'KM';
+    if (upperTrain.startsWith('KS ')) return 'KS';
+    if (upperTrain.startsWith('KD ')) return 'KD';
+    if (upperTrain.startsWith('KW ')) return 'KW';
+    if (upperTrain.startsWith('SKM ')) return 'SKM';
+    if (upperTrain.startsWith('WKD ')) return 'WKD';
+    if (upperTrain.startsWith('RJ ')) return 'RJ';
+    if (upperTrain.startsWith('LE ')) return 'LEO';
+
+    // Only use well-known, verified numbering patterns
+    if (trainNum) {
+      // PKP Intercity ranges (more conservative)
+      if ((trainNum >= 1000 && trainNum <= 1999)) return 'IC'; // IC services only
+
+      // Remove other ranges - better to show [?] than wrong operator
+    }
+  }
+
+  return null;
+}
+
+const operatorCode = getOperatorCode(trainNumber, carrier) || 'UNKNOWN';
+const operator = TRAIN_OPERATORS[operatorCode];
+
+// Icon sizes
+const iconSizes = {
+  sm: 'text-xs',
+  md: 'text-sm',
+  lg: 'text-base'
+};
+
+const badgeSizes = {
+  sm: 'text-[0.625rem] px-1.5 py-0.5',
+  md: 'text-[0.6875rem] px-2 py-1',
+  lg: 'text-[0.75rem] px-2.5 py-1'
+};
+---
+
+<div class="inline-flex items-center gap-1.5">
+  {showIcon && (
+    <i class={`fas fa-train ${iconSizes[iconSize]} text-brand-500`}></i>
+  )}
+
+  <span class="font-ticket font-semibold text-[0.875rem] text-ink">
+    {trainNumber}
+  </span>
+
+  <span
+    class={`inline-flex items-center font-ticket font-medium rounded-md ${badgeSizes[iconSize]} badge-operator-${operator.color}`}
+    title={operator.name}
+  >
+    {operatorCode === 'UNKNOWN' ? '?' : operatorCode}
+  </span>
+</div>

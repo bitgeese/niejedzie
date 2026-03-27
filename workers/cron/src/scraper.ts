@@ -741,6 +741,15 @@ async function scrapeTrainDetail(session: ScrapingSession, detailUrl: string): P
 		? detailUrl
 		: `${PORTAL_BASE}${detailUrl.startsWith('/') ? '' : '/'}${detailUrl}`;
 
+	// NEW: Session state validation logging
+	const sessionAge = Date.now() - session.createdAt;
+	const sessionAgeMinutes = Math.floor(sessionAge / 60000);
+	console.log(`[DEBUG] scrapeTrainDetail: Session age=${sessionAgeMinutes}min, URL=${fullUrl.slice(0, 80)}...`);
+
+	// NEW: Check if URL contains pid token (session-specific)
+	const hasPidToken = detailUrl.includes('pid=');
+	console.log(`[DEBUG] scrapeTrainDetail: Has PID token=${hasPidToken}, Cookies available=${!!session.verificationCookie}`);
+
 	let res: Response;
 	try {
 		// Add timeout to detail page fetches
@@ -813,32 +822,124 @@ function parseTrainDetailPage(html: string): ApiStation[] | null {
 	const stationBlockRegex = /timeline__content-station[\s\S]*?(?=timeline__content-station|timeline__footer|$)/g;
 	const stationBlocks = html.match(stationBlockRegex);
 
+	// NEW: Enhanced logging to debug parsing failures
+	console.log(`[DEBUG] parseTrainDetailPage: HTML length=${html.length} chars`);
+	console.log(`[DEBUG] parseTrainDetailPage: Found ${stationBlocks?.length || 0} station blocks`);
+
 	if (!stationBlocks || stationBlocks.length === 0) {
 		console.warn('[scraper:detail] No station blocks found on detail page');
+		// NEW: Check if HTML contains expected elements
+		const hasTimelineClass = html.includes('timeline__content-station');
+		const hasAlternateClass = html.includes('timeline') && html.includes('station');
+		console.warn(`[DEBUG] HTML analysis: timeline__content-station=${hasTimelineClass}, timeline+station=${hasAlternateClass}`);
 		return null;
+	}
+
+	// NEW: Warn if very low block count (likely indicates parsing issue)
+	if (stationBlocks.length < 5) {
+		console.warn(`[DEBUG] Very low station count (${stationBlocks.length}), may indicate regex mismatch with Portal HTML`);
 	}
 
 	for (let i = 0; i < stationBlocks.length; i++) {
 		const block = stationBlocks[i];
 
-		// Extract station name from <h3> tag, after "Stacja N:" prefix
-		const nameMatch = block.match(/<h3[^>]*>[\s\S]*?Stacja\s+\d+:\s*([^<]+)<\/h3>/i)
-			?? block.match(/<h3[^>]*>\s*([^<]+)<\/h3>/i);
+		// Extract station name from various HTML structures
+		const stationNameRegex = [
+			// NEW: Current Portal Pasażera structure with visuallyhidden span
+			/<span class="visuallyhidden">Stacja\s+\d+:\s*<\/span>([^<\n]+)/i,
+			// NEW: Alternative span pattern
+			/<span[^>]*>Stacja\s+\d+:\s*<\/span>\s*([^<\n]+)/i,
+			// Original patterns (keep as fallbacks)
+			/<h3[^>]*>[\s\S]*?Stacja\s+\d+:\s*([^<]+)<\/h3>/i,
+			/<h3[^>]*>\s*([^<]+)<\/h3>/i,
+			/<h[2-4][^>]*>([^<]+)<\/h[2-4]>/i,
+			/class="station[^"]*"[^>]*>([^<]+)</i,
+			/data-station[^>]*>([^<]+)</i,
+		];
 
-		if (!nameMatch) continue;
+		let nameMatch = null;
+		for (const regex of stationNameRegex) {
+			nameMatch = block.match(regex);
+			if (nameMatch) break;
+		}
 
-		const stationName = decodeHtmlEntities(nameMatch[1].trim());
+		// NEW: Debug what station name patterns exist in this block
+		if (!nameMatch) {
+			console.warn(`[DEBUG] Station ${i + 1}: No name match found in block`);
+			console.log(`[DEBUG] Block sample (first 200 chars): ${block.slice(0, 200)}`);
+			continue;
+		}
+
+		// NEW: Filter out non-station messages (redirects, errors, etc.)
+		const rawStationName = nameMatch[1].trim();
+		const isRedirectMessage = rawStationName.toLowerCase().includes('przekierowywanie') ||
+			rawStationName.toLowerCase().includes('redirect') ||
+			rawStationName.toLowerCase().includes('sprzedaż') ||
+			rawStationName.toLowerCase().includes('biletów') ||
+			rawStationName.toLowerCase().includes('system') ||
+			rawStationName.toLowerCase().includes('trwa') ||
+			rawStationName.startsWith('Trwa ');
+		const isTooLong = rawStationName.length > 50; // Real station names are typically shorter
+
+		if (isRedirectMessage || isTooLong) {
+			console.warn(`[DEBUG] Station ${i + 1}: Skipping non-station text: "${rawStationName.slice(0, 50)}..."`);
+			continue;
+		}
+
+		const stationName = decodeHtmlEntities(rawStationName);
 
 		// Extract all HH:MM time values from this block
+		// NEW: More robust time extraction with context validation
+		const timeContainers = block.match(/<div[^>]*time[^>]*>[\s\S]*?<\/div>/gi) || [];
 		const timeRegex = /(\d{1,2}:\d{2})/g;
-		const times: string[] = [];
-		let timeMatch: RegExpExecArray | null;
-		while ((timeMatch = timeRegex.exec(block)) !== null) {
-			times.push(timeMatch[1]);
+		let times: string[] = [];
+
+		// Try to extract times from time-specific containers first
+		if (timeContainers.length > 0) {
+			for (const container of timeContainers) {
+				let timeMatch: RegExpExecArray | null;
+				while ((timeMatch = timeRegex.exec(container)) !== null) {
+					times.push(timeMatch[1]);
+				}
+			}
+		}
+
+		// Fallback to extracting all times from the block if no time containers found
+		if (times.length === 0) {
+			let timeMatch: RegExpExecArray | null;
+			timeRegex.lastIndex = 0; // Reset regex
+			while ((timeMatch = timeRegex.exec(block)) !== null) {
+				times.push(timeMatch[1]);
+			}
+		}
+
+		// PHASE 1 FIX: Add time extraction validation
+		if (times.length === 0) {
+			console.warn(`[scraper:detail] Station ${i + 1}: No times extracted from HTML block`);
+			console.warn(`[DEBUG] Block sample: ${block.slice(0, 200)}`);
+			continue;
+		}
+
+		// Validate time format immediately
+		const validTimes = times.filter(time => /^(\d{1,2}):(\d{2})$/.test(time));
+		if (validTimes.length !== times.length) {
+			console.warn(`[scraper:detail] Station ${i + 1}: Filtered invalid times from ${times.length} to ${validTimes.length}`);
+			times = validTimes;
 		}
 
 		const isFirst = i === 0;
 		const isLast = i === stationBlocks.length - 1;
+		const isIntermediate = !isFirst && !isLast;
+
+		// NEW: Debug logging for each station's time extraction
+		console.log(`[DEBUG] Station ${i + 1}/${stationBlocks.length}: "${stationName}"`);
+		console.log(`[DEBUG]   Type: ${isFirst ? 'FIRST' : isLast ? 'LAST' : 'INTERMEDIATE'}`);
+		console.log(`[DEBUG]   Times found: ${times.length} [${times.join(', ')}]`);
+
+		// NEW: Warn about insufficient times for intermediate stations
+		if (isIntermediate && times.length < 4) {
+			console.warn(`[DEBUG]   WARNING: Intermediate station has ${times.length} times, expected 4`);
+		}
 
 		let plannedArrival: string | null = null;
 		let plannedDeparture: string | null = null;
@@ -860,35 +961,120 @@ function parseTrainDetailPage(html: string): ApiStation[] | null {
 			// Terminus: arrival only
 			// times[0] = planned arrival, times[1] = actual arrival
 			plannedArrival = timeToIsoString(times[0]);
-			actualArrival = timeToIsoString(times[1]);
-			arrivalDelayMinutes = calculateDelayMinutes(
-				parseTimeToMinutes(times[1]),
-				parseTimeToMinutes(times[0]),
-			);
+
+			// CRITICAL FIX: Validate actual time to detect 00:00:00 artifacts
+			const actualTime = times[1];
+			const plannedTime = times[0];
+			if (actualTime === '00:00' && plannedTime !== '00:00') {
+				// Likely data artifact - actual 00:00 when planned is not 00:00
+				const plannedMinutes = parseTimeToMinutes(plannedTime);
+				if (plannedMinutes > 12 * 60) { // Planned after noon, actual 00:00 is suspicious
+					console.warn(`[scraper:validation] Rejecting suspicious 00:00 actual time for planned ${plannedTime} at station ${stationName}`);
+					actualArrival = null;
+					arrivalDelayMinutes = null;
+				} else {
+					actualArrival = timeToIsoString(actualTime);
+					arrivalDelayMinutes = calculateDelayMinutes(
+						parseTimeToMinutes(actualTime),
+						parseTimeToMinutes(plannedTime),
+					);
+				}
+			} else {
+				actualArrival = timeToIsoString(actualTime);
+				arrivalDelayMinutes = calculateDelayMinutes(
+					parseTimeToMinutes(actualTime),
+					parseTimeToMinutes(plannedTime),
+				);
+			}
 		} else if (times.length >= 4) {
 			// Intermediate station: arrival + departure
 			// times[0] = planned arrival, times[1] = planned departure
 			// times[2] = actual arrival, times[3] = actual departure
 			plannedArrival = timeToIsoString(times[0]);
 			plannedDeparture = timeToIsoString(times[1]);
-			actualArrival = timeToIsoString(times[2]);
-			actualDeparture = timeToIsoString(times[3]);
-			arrivalDelayMinutes = calculateDelayMinutes(
-				parseTimeToMinutes(times[2]),
-				parseTimeToMinutes(times[0]),
-			);
-			departureDelayMinutes = calculateDelayMinutes(
-				parseTimeToMinutes(times[3]),
-				parseTimeToMinutes(times[1]),
-			);
+
+			// CRITICAL FIX: Validate actual times to detect 00:00:00 artifacts
+			const actualArrTime = times[2];
+			const plannedArrTime = times[0];
+			const actualDepTime = times[3];
+			const plannedDepTime = times[1];
+
+			// Validate actual arrival time
+			if (actualArrTime === '00:00' && plannedArrTime !== '00:00') {
+				const plannedMinutes = parseTimeToMinutes(plannedArrTime);
+				if (plannedMinutes > 12 * 60) { // Planned after noon, actual 00:00 is suspicious
+					console.warn(`[scraper:validation] Rejecting suspicious 00:00 actual arrival for planned ${plannedArrTime} at station ${stationName}`);
+					actualArrival = null;
+					arrivalDelayMinutes = null;
+				} else {
+					actualArrival = timeToIsoString(actualArrTime);
+					arrivalDelayMinutes = calculateDelayMinutes(
+						parseTimeToMinutes(actualArrTime),
+						parseTimeToMinutes(plannedArrTime),
+					);
+				}
+			} else {
+				actualArrival = timeToIsoString(actualArrTime);
+				arrivalDelayMinutes = calculateDelayMinutes(
+					parseTimeToMinutes(actualArrTime),
+					parseTimeToMinutes(plannedArrTime),
+				);
+			}
+
+			// Validate actual departure time
+			if (actualDepTime === '00:00' && plannedDepTime !== '00:00') {
+				const plannedMinutes = parseTimeToMinutes(plannedDepTime);
+				if (plannedMinutes > 12 * 60) { // Planned after noon, actual 00:00 is suspicious
+					console.warn(`[scraper:validation] Rejecting suspicious 00:00 actual departure for planned ${plannedDepTime} at station ${stationName}`);
+					actualDeparture = null;
+					departureDelayMinutes = null;
+				} else {
+					actualDeparture = timeToIsoString(actualDepTime);
+					departureDelayMinutes = calculateDelayMinutes(
+						parseTimeToMinutes(actualDepTime),
+						parseTimeToMinutes(plannedDepTime),
+					);
+				}
+			} else {
+				actualDeparture = timeToIsoString(actualDepTime);
+				departureDelayMinutes = calculateDelayMinutes(
+					parseTimeToMinutes(actualDepTime),
+					parseTimeToMinutes(plannedDepTime),
+				);
+			}
 		} else if (times.length >= 2) {
 			// Fallback: treat as arrival only if we can't determine position
 			plannedArrival = timeToIsoString(times[0]);
-			actualArrival = timeToIsoString(times[1]);
-			arrivalDelayMinutes = calculateDelayMinutes(
-				parseTimeToMinutes(times[1]),
-				parseTimeToMinutes(times[0]),
-			);
+
+			// CRITICAL FIX: Validate actual time to detect 00:00:00 artifacts
+			const actualTime = times[1];
+			const plannedTime = times[0];
+			if (actualTime === '00:00' && plannedTime !== '00:00') {
+				const plannedMinutes = parseTimeToMinutes(plannedTime);
+				if (plannedMinutes > 12 * 60) { // Planned after noon, actual 00:00 is suspicious
+					console.warn(`[scraper:validation] Rejecting suspicious 00:00 actual time for planned ${plannedTime} at station ${stationName}`);
+					actualArrival = null;
+					arrivalDelayMinutes = null;
+				} else {
+					actualArrival = timeToIsoString(actualTime);
+					arrivalDelayMinutes = calculateDelayMinutes(
+						parseTimeToMinutes(actualTime),
+						parseTimeToMinutes(plannedTime),
+					);
+				}
+			} else {
+				actualArrival = timeToIsoString(actualTime);
+				arrivalDelayMinutes = calculateDelayMinutes(
+					parseTimeToMinutes(actualTime),
+					parseTimeToMinutes(plannedTime),
+				);
+			}
+		} else {
+			// EXPLICIT HANDLING for times.length < 2
+			console.warn(`[scraper:detail] Station ${i + 1} (${stationName}): Insufficient time data (${times.length} times found), skipping station`);
+			console.warn(`[DEBUG] Times found: [${times.join(', ')}]`);
+			console.warn(`[DEBUG] HTML block sample: ${block.slice(0, 300)}`);
+			continue; // Skip this station entirely instead of creating null-time station
 		}
 
 		// Detect delay/cancellation status from CSS classes
@@ -1112,15 +1298,19 @@ async function transformToApiFormat(
 		const scheduleId = hashCode(`${fullTrainNumber}-${today}`);
 
 		// Check if we have detailed per-station data for this train
-		const trainKey = `${train.carrier}-${train.trainNumber}`;
+		// Handle null/undefined carrier consistently
+		const carrier = train.carrier || '';
+		const trainKey = `${carrier}-${train.trainNumber}`;
 		const detailStations = detailMap.get(trainKey);
 
 		let stations: ApiStation[];
 
 		if (detailStations && detailStations.length > 0) {
 			// Use the full per-station data from the detail page
+			console.log(`[transform] Using detailed data for ${trainKey}: ${detailStations.length} stations`);
 			stations = detailStations;
 		} else {
+			console.log(`[transform] Using fallback for ${trainKey}: no detailed data (detailStations=${detailStations?.length || 0})`);
 			// Fall back to a single station entry from the list view summary
 			// Clean the station name using Claude AI before fallback
 			let stationName = train.routeTo || 'Nieznana';
@@ -1134,16 +1324,33 @@ async function transformToApiFormat(
 				stationId: hashCode(train.routeTo || 'unknown'),
 				stationName,
 				sequenceNumber: 1,
-				plannedArrival: now,
+				plannedArrival: null,      // PHASE 1 FIX: Don't use current time as fallback
 				plannedDeparture: null,
 				actualArrival: null,
 				actualDeparture: null,
-				arrivalDelayMinutes: train.delayMinutes,
+				arrivalDelayMinutes: null, // PHASE 1 FIX: Don't use train.delayMinutes without time context
 				departureDelayMinutes: null,
-				isConfirmed: true,
+				isConfirmed: false,        // PHASE 1 FIX: Mark as unconfirmed since no real time data
 				isCancelled: false,
 			};
 			stations = [station];
+		}
+
+		// NEW: Auto-populate route start/end from station data when missing
+		let routeStart = train.routeFrom;
+		let routeEnd = train.routeTo;
+
+		if ((!routeStart || !routeEnd) && stations.length > 1) {
+			// Use first and last station from detailed station data
+			const sortedStations = [...stations].sort((a, b) => a.sequenceNumber - b.sequenceNumber);
+			if (!routeStart && sortedStations[0]?.stationName) {
+				routeStart = sortedStations[0].stationName;
+				console.log(`[DEBUG] Auto-populated route start: ${routeStart} for train ${fullTrainNumber}`);
+			}
+			if (!routeEnd && sortedStations[sortedStations.length - 1]?.stationName) {
+				routeEnd = sortedStations[sortedStations.length - 1].stationName;
+				console.log(`[DEBUG] Auto-populated route end: ${routeEnd} for train ${fullTrainNumber}`);
+			}
 		}
 
 		const apiTrain: ApiTrain = {
@@ -1152,8 +1359,8 @@ async function transformToApiFormat(
 			trainNumber: fullTrainNumber,
 			carrier: train.carrier || undefined,
 			category: train.carrier || undefined,
-			routeStartStation: train.routeFrom || undefined,
-			routeEndStation: train.routeTo || undefined,
+			routeStartStation: routeStart || undefined,
+			routeEndStation: routeEnd || undefined,
 			stations,
 		};
 
@@ -1211,7 +1418,9 @@ async function fetchTrainDetails(
 
 	for (let i = 0; i < toFetch.length; i++) {
 		const train = toFetch[i];
-		const trainKey = `${train.carrier}-${train.trainNumber}`;
+		// Handle null/undefined carrier consistently
+		const carrier = train.carrier || '';
+		const trainKey = `${carrier}-${train.trainNumber}`;
 
 		try {
 			const stations = await scrapeTrainDetail(session, train.detailUrl!);
@@ -1233,6 +1442,22 @@ async function fetchTrainDetails(
 	}
 
 	console.log(`[scraper:detail] Fetched ${successCount} detail pages (${failCount} failed)`);
+
+	// NEW: Enhanced logging for detailed breakdown
+	if (successCount === 0 && toFetch.length > 0) {
+		console.warn('[scraper:detail] All detail page fetches failed! Likely session/HTML issue');
+	}
+
+	// NEW: Log detailed breakdown of which trains succeeded vs failed
+	console.log(`[DEBUG] Detail fetch breakdown:`);
+	for (let i = 0; i < toFetch.length; i++) {
+		const train = toFetch[i];
+		const trainKey = `${train.carrier}-${train.trainNumber}`;
+		const result = detailMap.has(trainKey) ? 'SUCCESS' : 'FAILED';
+		const stationCount = detailMap.get(trainKey)?.length || 0;
+		console.log(`[DEBUG]   ${trainKey}: ${result} (${stationCount} stations, ${train.delayMinutes}min delay)`);
+	}
+
 	return detailMap;
 }
 
@@ -1335,4 +1560,72 @@ export async function scrapePortalStats(): Promise<PortalStats | null> {
 		console.error(`[scraper:stats] Error: ${err}`);
 		return null;
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Diagnostic Functions (for debugging detail page parsing failures)
+// ---------------------------------------------------------------------------
+
+/**
+ * Diagnostic function to manually test single detail page parsing.
+ * This helps identify exact failure points in the parsing logic.
+ */
+async function debugDetailPage(detailUrl: string, session: ScrapingSession): Promise<void> {
+	console.log(`[DEBUG] === Detail Page Diagnostic Test ===`);
+	console.log(`[DEBUG] URL: ${detailUrl}`);
+	console.log(`[DEBUG] Session age: ${Math.floor((Date.now() - session.createdAt) / 60000)} minutes`);
+
+	const fullUrl = detailUrl.startsWith('http')
+		? detailUrl
+		: `${PORTAL_BASE}${detailUrl.startsWith('/') ? '' : '/'}${detailUrl}`;
+
+	try {
+		const res = await fetch(fullUrl, {
+			headers: {
+				'User-Agent': USER_AGENT,
+				'Accept': 'text/html,application/xhtml+xml',
+				'Cookie': buildCookieHeader(session),
+			},
+			redirect: 'manual',
+		});
+
+		console.log(`[DEBUG] Response status: ${res.status}`);
+		console.log(`[DEBUG] Response headers:`, Object.fromEntries(res.headers.entries()));
+
+		if (!res.ok) {
+			console.warn(`[DEBUG] Failed to fetch detail page: ${res.status}`);
+			return;
+		}
+
+		const html = await res.text();
+		console.log(`[DEBUG] HTML length: ${html.length} characters`);
+
+		// Test regex patterns
+		const timelineClass = html.match(/timeline__content-station/g)?.length || 0;
+		const stationElements = html.match(/<h[2-4][^>]*>.*?[Ss]tacja/g)?.length || 0;
+		const timeElements = html.match(/\d{1,2}:\d{2}/g)?.length || 0;
+
+		console.log(`[DEBUG] HTML analysis:`);
+		console.log(`[DEBUG]   - timeline__content-station occurrences: ${timelineClass}`);
+		console.log(`[DEBUG]   - station heading elements: ${stationElements}`);
+		console.log(`[DEBUG]   - time elements (HH:MM): ${timeElements}`);
+
+		// Test actual parsing
+		const stations = parseTrainDetailPage(html);
+		console.log(`[DEBUG] Parsing result: ${stations?.length || 0} stations extracted`);
+
+		if (stations && stations.length > 0) {
+			console.log(`[DEBUG] First station:`, stations[0]);
+			console.log(`[DEBUG] Last station:`, stations[stations.length - 1]);
+		}
+
+		// Log first 500 chars of HTML for manual inspection
+		console.log(`[DEBUG] HTML sample (first 500 chars):`);
+		console.log(html.slice(0, 500));
+
+	} catch (err) {
+		console.error(`[DEBUG] Diagnostic fetch error: ${err}`);
+	}
+
+	console.log(`[DEBUG] === End Diagnostic Test ===`);
 }

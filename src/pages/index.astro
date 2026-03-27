@@ -1,5 +1,6 @@
 ---
 import Base from '../layouts/Base.astro';
+import TrainOperator from '../components/TrainOperator.astro';
 import { PRICES } from '../lib/constants';
 import { fetchTodayDelays } from '../lib/fetch-data';
 
@@ -70,7 +71,7 @@ const exampleTrain = liveTopTrain ? {
 
           <div class="px-6 pb-5 text-center">
             <p class="font-ticket text-[0.625rem] text-ink-faint tracking-wider uppercase">
-              Dane: PKP PLK Otwarte Dane Kolejowe &middot; Odświeżane co 2 min
+              Dane PKP &middot; Odświeżane co kilka minut
             </p>
           </div>
         </div>
@@ -145,7 +146,7 @@ const exampleTrain = liveTopTrain ? {
               </div>
               <div class="flex items-center justify-between mb-4">
                 <div class="flex items-center gap-2.5">
-                  <span class="font-ticket font-semibold text-[1rem] text-ink">{exampleTrain.number}</span>
+                  <TrainOperator trainNumber={exampleTrain.number} carrier={exampleTrain.carrier} iconSize="lg" />
                   <span class={`badge ${exampleTrain.delay > 30 ? 'badge-danger' : 'badge-warn'}`}>
                     +{exampleTrain.delay} min
                   </span>

@@ -3,6 +3,7 @@ export const prerender = false;
 
 import Base from '../../layouts/Base.astro';
 import StatCard from '../../components/StatCard.astro';
+import TrainOperator from '../../components/TrainOperator.astro';
 import { fetchTodayDelays, EMPTY_TODAY } from '../../lib/fetch-data';
 
 const data = await fetchTodayDelays() ?? EMPTY_TODAY;
@@ -133,7 +134,7 @@ const updateTime = now.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-d
         {data.topDelayed.map((train) => (
           <div class="ticket-card rounded-xl p-4 fade-up">
             <div class="flex flex-wrap items-center gap-3">
-              <span class="font-ticket font-semibold text-[0.875rem] text-ink">{train.trainNumber}</span>
+              <TrainOperator trainNumber={train.trainNumber} carrier={train.carrier} />
               <span class={`badge ${train.delay >= 30 ? 'badge-danger' : 'badge-warn'}`}>+{train.delay} min</span>
               {train.route && <span class="text-[0.8125rem] text-ink-muted">{train.route}</span>}
               {train.station && <span class="ml-auto font-ticket text-[0.6875rem] text-ink-faint">Ostatnia: {train.station}</span>}

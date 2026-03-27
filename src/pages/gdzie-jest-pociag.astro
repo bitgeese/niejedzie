@@ -4,6 +4,7 @@ export const prerender = false;
 import Base from '../layouts/Base.astro';
 import StatCard from '../components/StatCard.astro';
 import StationTimeline from '../components/StationTimeline.astro';
+import TrainOperator from '../components/TrainOperator.astro';
 import { PRICES } from '../lib/constants';
 import { fetchTodayDelays } from '../lib/fetch-data';
 
@@ -251,9 +252,7 @@ const delayBadgeText = currentDelay === 0 ? 'Punktualnie' : `+${currentDelay} mi
             <div class="p-5 pb-4">
               <div class="flex items-center justify-between mb-3">
                 <div class="flex items-center gap-2.5">
-                  <span class="font-ticket font-semibold text-[1rem] text-ink">{trainNumber}</span>
-                  <span class="text-[0.75rem] text-ink-muted">&middot;</span>
-                  <span class="text-[0.8125rem] text-ink-muted font-medium">{carrier}</span>
+                  <TrainOperator trainNumber={trainNumber} carrier={carrier} iconSize="lg" />
                 </div>
                 <span class="font-ticket text-[0.6875rem] text-ink-faint">{todayFormatted}</span>
               </div>

@@ -1,6 +1,7 @@
 ---
 import Base from '../../layouts/Base.astro';
 import StatCard from '../../components/StatCard.astro';
+import TrainOperator from '../../components/TrainOperator.astro';
 import { PRICES } from '../../lib/constants';
 import { fetchCityData, fetchDisruptions, EMPTY_CITY } from '../../lib/fetch-data';
 
@@ -136,7 +137,7 @@ function punctualityBadge(p: number) {
               <div class="flex items-center gap-4 min-w-0">
                 <span class="font-ticket text-[0.6875rem] font-semibold text-ink-faint w-5 shrink-0">#{i + 1}</span>
                 <div class="min-w-0">
-                  <span class="font-ticket font-semibold text-[0.875rem] text-ink">{train.number}</span>
+                  <TrainOperator trainNumber={train.number} carrier={train.carrier} />
                   <p class="text-[0.75rem] text-ink-muted truncate">{train.route}</p>
                 </div>
               </div>
@@ -163,7 +164,7 @@ function punctualityBadge(p: number) {
       {sparklineTrains.map((train, i) => (
         <div class="bg-surface-raised rounded-xl border border-border p-4">
           <div class="flex items-center justify-between mb-3">
-            <span class="font-ticket font-semibold text-[0.8125rem] text-ink">{train.number}</span>
+            <TrainOperator trainNumber={train.number} carrier={train.carrier} iconSize="sm" />
             <span class="font-ticket text-[0.6875rem] text-ink-faint">avg +{Math.round(train.data.reduce((a, b) => a + b, 0) / train.data.length)} min</span>
           </div>
           <div id={`sparkline-${i}`} style="min-height: 50px;"></div>

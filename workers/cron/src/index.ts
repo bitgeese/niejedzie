@@ -553,8 +553,32 @@ async function pollOperations(env: Env): Promise<void> {
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`);
 
+	// PHASE 2 FIX: Add data validation before database insertion
+	const validatedTrains = allTrains.map(train => {
+		const validStations = train.stations.filter(st => {
+			// Skip stations with no time data at all
+			if (!st.plannedArrival && !st.plannedDeparture &&
+				!st.actualArrival && !st.actualDeparture) {
+				console.warn(`[validation] Skipping station ${st.stationName} (${train.trainNumber}): all times null`);
+				return false;
+			}
+
+			// Flag suspicious midnight times
+			if ((st.plannedArrival?.includes('T00:00:00') || st.actualArrival?.includes('T00:00:00')) &&
+				(st.plannedDeparture || st.actualDeparture)) {
+				console.warn(`[validation] Suspicious midnight time in ${st.stationName} (${train.trainNumber})`);
+			}
+
+			return true;
+		});
+
+		return { ...train, stations: validStations };
+	}).filter(train => train.stations.length > 0); // Remove trains with no valid stations
+
+	console.log(`[validation] Filtered ${allTrains.length} → ${validatedTrains.length} trains after validation`);
+
 	const batch: D1PreparedStatement[] = [];
-	for (const train of allTrains) {
+	for (const train of validatedTrains) {
 		for (const st of train.stations) {
 			batch.push(
 				insertStmt.bind(

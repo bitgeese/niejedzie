@@ -97,6 +97,13 @@ body {
 .badge-warn { background: #fef3c7; color: #92400e; }
 .badge-danger { background: #fee2e2; color: #991b1b; }
 
+/* Operator badges */
+.badge-operator-red { background: #fef2f2; color: #dc2626; border: 1px solid #fca5a5; }
+.badge-operator-blue { background: #eff6ff; color: #2563eb; border: 1px solid #93c5fd; }
+.badge-operator-green { background: #f0fdf4; color: #16a34a; border: 1px solid #86efac; }
+.badge-operator-purple { background: #faf5ff; color: #9333ea; border: 1px solid #c4b5fd; }
+.badge-operator-gray { background: #f9fafb; color: #6b7280; border: 1px solid #d1d5db; }
+
 /* === Buttons === */
 
 .btn-primary {
