@@ -284,9 +284,9 @@ const exampleTrain = liveTopTrain ? {
 
         <!-- CTA — push monthly -->
         <div class="p-5 bg-brand-50 border-t border-brand-200">
-          <a href="/premium" class="btn-primary w-full text-center block">
+          <button onclick="checkout('subscription')" class="btn-primary w-full text-center block">
             Monitoruj bez limitu — 15 zł/msc
-          </a>
+          </button>
           <p class="text-center text-[0.75rem] text-ink-muted mt-2.5">
             Nielimitowane przesiadki &middot; Priorytetowe alerty &middot; Historia tras
           </p>
@@ -475,5 +475,21 @@ const exampleTrain = liveTopTrain ? {
     </div>
     <p class="text-[0.8125rem] text-ink-faint mt-5">3 przesiadki w miesiącu? Subskrypcja już się zwraca.</p>
   </section>
+
+  <script>
+    async function checkout(mode) {
+      const res = await fetch('/api/checkout/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert('Błąd: ' + (data.error || 'Spróbuj ponownie'));
+      }
+    }
+  </script>
 
 </Base>

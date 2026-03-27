@@ -18,6 +18,7 @@
     "@tailwindcss/vite": "^4.2.2",
     "apexcharts": "^5.10.4",
     "astro": "^6.0.8",
+    "stripe": "^21.0.1",
     "tailwindcss": "^4.2.2",
     "wrangler": "^4.77.0"
   }

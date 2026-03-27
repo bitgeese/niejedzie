@@ -1,0 +1,93 @@
+---
+import Base from '../layouts/Base.astro';
+---
+<Base title="Płatność przyjęta — monitoring aktywny" description="Twoja płatność została przyjęta. Monitoring przesiadki jest aktywny — dostaniesz powiadomienie push jeśli opóźnienie zagrozi połączeniu.">
+
+  <!-- Hero -->
+  <section class="max-w-5xl mx-auto px-5 pt-20 pb-12 text-center">
+    <div class="max-w-lg mx-auto">
+      <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-8">
+        <span class="text-green-600 text-4xl">&#10003;</span>
+      </div>
+
+      <p class="section-label text-brand-300 mb-4">// płatność przyjęta</p>
+      <h1 class="text-[2rem] md:text-[2.5rem] font-extrabold text-ink leading-tight tracking-tight mb-4">
+        Monitoring aktywny!
+      </h1>
+      <p class="text-[1.0625rem] text-ink-muted max-w-md mx-auto leading-relaxed mb-3">
+        Twoja płatność została przyjęta. Od teraz śledzimy Twoją przesiadkę w czasie rzeczywistym.
+      </p>
+      <p class="text-[0.875rem] text-ink-faint max-w-sm mx-auto">
+        Anulujesz kiedy chcesz. Bez zobowiązań.
+      </p>
+    </div>
+  </section>
+
+  <!-- What happens next -->
+  <section class="max-w-5xl mx-auto px-5 pb-20">
+    <div class="max-w-lg mx-auto">
+      <div class="bg-surface-raised rounded-2xl border border-border overflow-hidden">
+        <div class="p-6 border-b border-border">
+          <p class="section-label text-ink-faint mb-6">// co się teraz dzieje</p>
+
+          <div class="space-y-5">
+            <div class="flex items-start gap-4">
+              <div class="step-number shrink-0 mt-0.5 bg-brand-500/20 border-brand-500/30 text-brand-500">01</div>
+              <div>
+                <h3 class="text-[0.9375rem] font-bold text-ink mb-1">Monitorujemy Twój pociąg</h3>
+                <p class="text-[0.8125rem] text-ink-muted leading-relaxed">
+                  Sprawdzamy opóźnienia co 2 minuty. Dane prosto z systemu PKP PLK.
+                </p>
+              </div>
+            </div>
+
+            <div class="flex items-start gap-4">
+              <div class="step-number shrink-0 mt-0.5 bg-brand-500/20 border-brand-500/30 text-brand-500">02</div>
+              <div>
+                <h3 class="text-[0.9375rem] font-bold text-ink mb-1">Dostaniesz powiadomienie push</h3>
+                <p class="text-[0.8125rem] text-ink-muted leading-relaxed">
+                  Jeśli opóźnienie zagrozi Twojej przesiadce — wyślemy alert na Twój telefon. Nawet jeśli nie masz otwartej strony.
+                </p>
+              </div>
+            </div>
+
+            <div class="flex items-start gap-4">
+              <div class="step-number shrink-0 mt-0.5 bg-brand-500/20 border-brand-500/30 text-brand-500">03</div>
+              <div>
+                <h3 class="text-[0.9375rem] font-bold text-ink mb-1">Podpowiemy alternatywy</h3>
+                <p class="text-[0.8125rem] text-ink-muted leading-relaxed">
+                  Jeśli przesiadka jest zagrożona, pokażemy następne pociągi jadące w tym samym kierunku.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Highlight box -->
+        <div class="p-5 bg-brand-50">
+          <div class="flex items-start gap-3">
+            <span class="text-brand-500 text-lg leading-none mt-0.5">&#9889;</span>
+            <p class="text-[0.8125rem] text-ink-secondary leading-relaxed">
+              <strong>Ważne:</strong> Zezwól na powiadomienia w przeglądarce, żebyśmy mogli wysyłać Ci alerty. Poprosimy o zgodę przy następnym sprawdzeniu przesiadki.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <!-- CTAs -->
+      <div class="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+        <a href="/" class="btn-primary text-center">
+          Wróć na stronę główną
+        </a>
+        <a href="/opoznienia/dzisiaj" class="btn-secondary text-center">
+          Sprawdź opóźnienia
+        </a>
+      </div>
+
+      <p class="text-center text-xs text-ink-faint mt-5">
+        Masz pytania? Napisz do nas na <a href="/o-nas" class="text-brand-500 hover:underline">stronie kontaktowej</a>.
+      </p>
+    </div>
+  </section>
+
+</Base>

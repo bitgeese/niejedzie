@@ -159,7 +159,7 @@ const bufferColor = transfer.currentBuffer > 20 ? 'green' : transfer.currentBuff
                 <span class="text-xs text-ink-faint">/msc</span>
               </div>
             </div>
-            <button class="w-full py-3 bg-brand-500 hover:bg-brand-600 text-white font-bold rounded-xl transition-colors text-sm shadow-md shadow-brand-500/20">
+            <button onclick="checkout('subscription')" class="w-full py-3 bg-brand-500 hover:bg-brand-600 text-white font-bold rounded-xl transition-colors text-sm shadow-md shadow-brand-500/20">
               Włącz plan miesięczny
             </button>
             <div class="flex flex-wrap gap-x-4 gap-y-1 mt-2.5">
@@ -190,7 +190,7 @@ const bufferColor = transfer.currentBuffer > 20 ? 'green' : transfer.currentBuff
                 <span class="font-ticket text-lg font-bold text-ink-secondary">5 zł</span>
               </div>
             </div>
-            <button class="w-full py-2.5 bg-surface-raised hover:bg-surface-sunken text-ink-secondary font-semibold rounded-xl transition-colors text-sm border border-border-strong">
+            <button onclick="checkout('payment')" class="w-full py-2.5 bg-surface-raised hover:bg-surface-sunken text-ink-secondary font-semibold rounded-xl transition-colors text-sm border border-border-strong">
               Kup jednorazowo — 5 zł
             </button>
           </div>
@@ -287,11 +287,27 @@ const bufferColor = transfer.currentBuffer > 20 ? 'green' : transfer.currentBuff
       <a href="/premium" class="px-8 py-3 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-xl transition-colors text-sm shadow-md shadow-brand-500/20">
         Plan miesięczny — 15 zł/msc
       </a>
-      <button class="px-6 py-3 bg-surface-raised hover:bg-surface-sunken text-ink-secondary font-medium rounded-xl transition-colors text-sm border border-border-strong">
+      <button onclick="checkout('payment')" class="px-6 py-3 bg-surface-raised hover:bg-surface-sunken text-ink-secondary font-medium rounded-xl transition-colors text-sm border border-border-strong">
         Tylko ta przesiadka — 5 zł
       </button>
     </div>
     <p class="text-xs text-ink-faint mt-3">3 przesiadki w miesiącu? Plan miesięczny już się opłaca.</p>
   </section>
+
+  <script>
+    async function checkout(mode) {
+      const res = await fetch('/api/checkout/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert('Błąd: ' + (data.error || 'Spróbuj ponownie'));
+      }
+    }
+  </script>
 
 </Base>

@@ -19,12 +19,12 @@ import Base from '../layouts/Base.astro';
         <p class="text-[0.875rem] text-white/30 mb-10">Anulujesz kiedy chcesz. Bez zobowiązań. Bez haczyków.</p>
 
         <div class="flex flex-col sm:flex-row gap-3 justify-center mb-6">
-          <button class="btn-primary text-base px-10 py-4" disabled>
+          <button class="btn-primary text-base px-10 py-4" onclick="checkout('subscription')">
             Zacznij za 15 zł/msc
           </button>
         </div>
         <p class="font-ticket text-[0.625rem] text-white/20 tracking-wider uppercase">
-          Wkrótce dostępne &middot; Karta / BLIK &middot; Stripe
+          Karta / BLIK &middot; Stripe
         </p>
       </div>
     </div>
@@ -317,7 +317,7 @@ import Base from '../layouts/Base.astro';
       Włącz plan miesięczny i zapomnij o sprawdzaniu opóźnień. Damy Ci znać kiedy trzeba reagować.
     </p>
     <div class="flex flex-col sm:flex-row gap-3 justify-center mb-6">
-      <button class="btn-primary text-base px-10 py-4" disabled>
+      <button class="btn-primary text-base px-10 py-4" onclick="checkout('subscription')">
         Zacznij za 15 zł/msc
       </button>
       <a href="/cennik" class="btn-secondary text-base px-8 py-4">
@@ -328,5 +328,21 @@ import Base from '../layouts/Base.astro';
       Anulujesz kiedy chcesz &middot; Karta lub BLIK &middot; Nie jesteśmy powiązani z PKP
     </p>
   </section>
+
+  <script>
+    async function checkout(mode) {
+      const res = await fetch('/api/checkout/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode }),
+      });
+      const data = await res.json();
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        alert('Błąd: ' + (data.error || 'Spróbuj ponownie'));
+      }
+    }
+  </script>
 
 </Base>
