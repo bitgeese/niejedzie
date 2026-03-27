@@ -20,8 +20,13 @@ export const POST: APIRoute = async ({ request }) => {
     const sessionId = crypto.randomUUID();
 
     // Create Stripe Checkout session
+    // BLIK + P24 only work for one-time payments, not subscriptions
+    const paymentMethods = mode === 'payment'
+      ? ['card', 'blik', 'p24']
+      : ['card'];
+
     const checkoutParams: any = {
-      payment_method_types: ['card', 'blik', 'p24'],
+      payment_method_types: paymentMethods,
       success_url: `${baseUrl}/sukces?session_id=${sessionId}`,
       cancel_url: `${baseUrl}/wynik`,
       locale: 'pl',
@@ -74,7 +79,12 @@ export const POST: APIRoute = async ({ request }) => {
 
     return Response.json({ url: session.url });
   } catch (err: any) {
-    console.error('[checkout] Error:', err.message);
-    return Response.json({ error: 'Checkout failed' }, { status: 500 });
+    console.error('[checkout] Error:', err.message, err.stack);
+    return Response.json({
+      error: 'Checkout failed',
+      detail: err.message,
+      hasKey: !!env.STRIPE_SECRET_KEY,
+      hasPrice: !!env.STRIPE_PRICE_MONTHLY,
+    }, { status: 500 });
   }
 };
