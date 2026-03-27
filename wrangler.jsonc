@@ -18,8 +18,8 @@
 		}
 	],
 	"vars": {
-		"STRIPE_PUBLISHABLE_KEY": "pk_test_PLACEHOLDER",
-		"STRIPE_PRICE_MONTHLY": "price_PLACEHOLDER"
+		"STRIPE_PUBLISHABLE_KEY": "pk_test_51TFOePBnylcvivAPxnALy35Gdepjw924kmzhONbG0BLdjryycKVMiz3WXrMLRoBuxK1LBR8CkUGERoiFOd5MWgW100CCkb6Wju",
+		"STRIPE_PRICE_MONTHLY": "price_1TFYp6BnylcvivAPPA98IgXr"
 	},
 	"kv_namespaces": [
 		{
