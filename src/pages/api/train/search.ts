@@ -1,0 +1,212 @@
+/**
+ * GET /api/train/search?q=35170
+ * Searches D1 trains table, returns train + per-station delay data.
+ */
+
+export const prerender = false;
+import type { APIRoute } from 'astro';
+import { env } from 'cloudflare:workers';
+
+interface StationResult {
+  name: string;
+  plannedArr: string | null;
+  plannedDep: string | null;
+  actualArr: string | null;
+  actualDep: string | null;
+  delay: number;
+  passed: boolean;
+  current: boolean;
+}
+
+interface SearchResponse {
+  train: {
+    trainNumber: string;
+    carrier: string;
+    category: string;
+    routeStart: string;
+    routeEnd: string;
+    scheduleId: number;
+    orderId: number;
+  } | null;
+  stations: StationResult[];
+  suggestions: string[];
+  error?: string;
+}
+
+const CACHE_TTL = 60;
+
+export const GET: APIRoute = async ({ url }) => {
+  const headers = {
+    'Content-Type': 'application/json',
+    'Cache-Control': `public, max-age=${CACHE_TTL}`,
+  };
+
+  try {
+    const q = url.searchParams.get('q')?.trim();
+
+    if (!q || q.length < 2) {
+      return new Response(
+        JSON.stringify({
+          error: 'Wpisz minimum 2 znaki',
+          train: null,
+          stations: [],
+          suggestions: [],
+        } satisfies SearchResponse),
+        { status: 400, headers },
+      );
+    }
+
+    // Strip common prefixes for numeric search — users may type "IC 35170" or just "35170"
+    const numericPart = q.replace(/^(IC|EIC|TLK|KS|KM|SKM|R|RE|IR|EN)\s*/i, '').trim();
+    const searchTerm = `%${numericPart}%`;
+
+    // ── Search trains table ──────────────────────────────────────────
+    const trainRows = await env.DB.prepare(`
+      SELECT schedule_id, order_id, train_number, carrier, category, route_start, route_end
+      FROM trains
+      WHERE train_number LIKE ?
+      LIMIT 5
+    `).bind(searchTerm).all();
+
+    if (!trainRows.results?.length) {
+      return new Response(
+        JSON.stringify({
+          error: `Nie znaleziono pociągu "${q}"`,
+          train: null,
+          stations: [],
+          suggestions: [],
+        } satisfies SearchResponse),
+        { headers },
+      );
+    }
+
+    // Suggestions: all matching train numbers
+    const suggestions = trainRows.results.map((r) => r.train_number as string);
+
+    // Use the first match for detailed data
+    const first = trainRows.results[0];
+    const scheduleId = first.schedule_id as number;
+    const orderId = first.order_id as number;
+    const trainNumber = first.train_number as string;
+    const carrier = first.carrier as string;
+    const category = first.category as string;
+    const routeStart = first.route_start as string;
+    const routeEnd = first.route_end as string;
+
+    const train = {
+      trainNumber,
+      carrier,
+      category,
+      routeStart,
+      routeEnd,
+      scheduleId,
+      orderId,
+    };
+
+    // ── Get today's date in YYYY-MM-DD ───────────────────────────────
+    const now = new Date();
+    const operatingDate = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      String(now.getDate()).padStart(2, '0'),
+    ].join('-');
+
+    // ── Query delay_snapshots for today ──────────────────────────────
+    const snapshotRows = await env.DB.prepare(`
+      SELECT station_name, planned_arrival, planned_departure, actual_arrival, actual_departure,
+             arrival_delay, departure_delay, sequence_num, is_confirmed, is_cancelled, recorded_at
+      FROM delay_snapshots
+      WHERE schedule_id = ? AND order_id = ? AND operating_date = ?
+      ORDER BY sequence_num ASC, recorded_at DESC
+    `).bind(scheduleId, orderId, operatingDate).all();
+
+    if (!snapshotRows.results?.length) {
+      // Train exists in metadata but no snapshots for today
+      return new Response(
+        JSON.stringify({
+          train,
+          stations: [],
+          suggestions,
+          error: 'Brak danych o przejazdach na dzisiaj',
+        } satisfies SearchResponse),
+        { headers },
+      );
+    }
+
+    // ── Deduplicate by station_name — keep latest by recorded_at ─────
+    const stationMap = new Map<string, typeof snapshotRows.results[0]>();
+    for (const row of snapshotRows.results) {
+      const name = row.station_name as string;
+      const existing = stationMap.get(name);
+      if (!existing) {
+        stationMap.set(name, row);
+      }
+      // rows are ordered by recorded_at DESC within same sequence_num,
+      // so the first occurrence per station_name is already the latest
+    }
+
+    // Build station list, ordered by sequence_num
+    const stationEntries = Array.from(stationMap.values()).sort(
+      (a, b) => (a.sequence_num as number) - (b.sequence_num as number),
+    );
+
+    const stations: StationResult[] = stationEntries.map((r) => {
+      const arrDelay = (r.arrival_delay as number) || 0;
+      const depDelay = (r.departure_delay as number) || 0;
+      const delay = Math.max(arrDelay, depDelay);
+      const hasActual = r.actual_arrival !== null || r.actual_departure !== null;
+      const isConfirmed = r.is_confirmed === 1;
+
+      return {
+        name: (r.station_name as string) || '',
+        plannedArr: formatTime(r.planned_arrival as string | null),
+        plannedDep: formatTime(r.planned_departure as string | null),
+        actualArr: formatTime(r.actual_arrival as string | null),
+        actualDep: formatTime(r.actual_departure as string | null),
+        delay,
+        passed: hasActual && isConfirmed,
+        current: false,
+      };
+    });
+
+    // Mark the last passed station as current
+    const lastPassedIdx = stations.reduce((acc, s, i) => (s.passed ? i : acc), -1);
+    if (lastPassedIdx >= 0) {
+      stations[lastPassedIdx].current = true;
+    }
+
+    const response: SearchResponse = { train, stations, suggestions };
+    return new Response(JSON.stringify(response), { headers });
+  } catch (err) {
+    console.error('[api/train/search] Error:', err);
+    return new Response(
+      JSON.stringify({
+        error: 'Wewnętrzny błąd serwera',
+        train: null,
+        stations: [],
+        suggestions: [],
+      } satisfies SearchResponse),
+      { status: 500, headers },
+    );
+  }
+};
+
+// ── Helpers ────────────────────────────────────────────────────────────
+
+/**
+ * Formats time strings — they may come as "HH:MM:SS" or "HH:MM" from the DB.
+ * Returns "HH:MM" or null.
+ */
+function formatTime(value: string | null): string | null {
+  if (!value) return null;
+  // Already HH:MM
+  if (/^\d{2}:\d{2}$/.test(value)) return value;
+  // HH:MM:SS → HH:MM
+  if (/^\d{2}:\d{2}:\d{2}$/.test(value)) return value.slice(0, 5);
+  // ISO datetime — extract time
+  if (value.includes('T')) {
+    const timePart = value.split('T')[1];
+    return timePart ? timePart.slice(0, 5) : null;
+  }
+  return value;
+}

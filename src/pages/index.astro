@@ -4,6 +4,15 @@ import { fetchTodayDelays } from '../lib/fetch-data';
 
 const todayData = await fetchTodayDelays();
 const liveStats = todayData?.stats;
+
+const liveTopTrain = todayData?.topDelayed?.[0] ?? null;
+// If we have a real delayed train, use it for the example
+const exampleTrain = liveTopTrain ? {
+  number: liveTopTrain.trainNumber,
+  delay: liveTopTrain.delay,
+  route: liveTopTrain.route,
+  carrier: liveTopTrain.carrier || 'IC',
+} : null; // null = use hardcoded mock
 ---
 <Base title="Monitor przesiadek PKP — dostaniesz alert jeśli nie zdążysz">
 
@@ -125,75 +134,153 @@ const liveStats = todayData?.stats;
     <p class="section-label text-center mb-12">// przykład na żywo</p>
     <div class="max-w-md mx-auto">
       <div class="ticket-card rounded-2xl overflow-hidden shadow-lg">
-        <!-- Train 1 -->
-        <div class="p-5 pb-4">
-          <div class="flex items-center justify-between mb-4">
-            <div class="flex items-center gap-2.5">
-              <span class="font-ticket font-semibold text-[0.875rem] text-ink">IC 5313</span>
-              <span class="badge badge-warn">+18 min</span>
-            </div>
-            <span class="font-ticket text-[0.6875rem] text-ink-faint">26.03.2026</span>
-          </div>
-          <div class="route-line">
-            <div class="text-right min-w-[4.5rem]">
-              <div class="font-ticket font-medium text-[0.875rem] text-ink">11:10</div>
-              <div class="text-[0.6875rem] text-ink-faint">Kraków Gł.</div>
-            </div>
-            <div class="route-dot bg-brand-500"></div>
-            <div class="route-dash"></div>
-            <div class="route-duration">2h 53m</div>
-            <div class="route-dash"></div>
-            <div class="route-dot bg-ink-faint"></div>
-            <div class="min-w-[4.5rem]">
-              <div class="font-ticket font-medium text-[0.875rem] text-ink">
-                <span class="line-through text-ink-faint decoration-ink-faint/50">13:45</span>
-                <span class="text-delay-warn ml-1">14:03</span>
+        {exampleTrain ? (
+          <!-- Live data ticket -->
+          <Fragment>
+            <div class="p-5 pb-4">
+              <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2.5">
+                  <span class="font-ticket font-semibold text-[0.875rem] text-ink">{exampleTrain.number}</span>
+                  <span class={`badge ${exampleTrain.delay > 15 ? 'badge-danger' : exampleTrain.delay > 5 ? 'badge-warn' : 'badge-safe'}`}>
+                    {exampleTrain.delay > 0 ? `+${exampleTrain.delay} min` : 'Punktualnie'}
+                  </span>
+                </div>
+                <span class="font-ticket text-[0.6875rem] text-brand-500">Dane na żywo</span>
               </div>
-              <div class="text-[0.6875rem] text-ink-faint">Warszawa C.</div>
+              {exampleTrain.route && (
+                <div class="route-line">
+                  <div class="text-right min-w-[4.5rem]">
+                    <div class="font-ticket font-medium text-[0.875rem] text-ink">--:--</div>
+                    <div class="text-[0.6875rem] text-ink-faint">{exampleTrain.route.split(' → ')[0] || '—'}</div>
+                  </div>
+                  <div class={`route-dot ${exampleTrain.delay > 5 ? 'bg-delay-warn' : 'bg-brand-500'}`}></div>
+                  <div class="route-dash"></div>
+                  <div class="route-duration">{exampleTrain.carrier}</div>
+                  <div class="route-dash"></div>
+                  <div class={`route-dot ${exampleTrain.delay > 5 ? 'bg-delay-warn' : 'bg-ink-faint'}`}></div>
+                  <div class="min-w-[4.5rem]">
+                    <div class="font-ticket font-medium text-[0.875rem] text-ink">--:--</div>
+                    <div class="text-[0.6875rem] text-ink-faint">{exampleTrain.route.split(' → ')[1] || '—'}</div>
+                  </div>
+                </div>
+              )}
             </div>
-          </div>
-        </div>
 
-        <!-- Transfer -->
-        <div class="ticket-divider"></div>
-        <div class="px-5 py-3.5 bg-surface-sunken">
-          <div class="flex items-center justify-between">
-            <div class="text-[0.8125rem] text-ink-muted">
-              Przesiadka: <span class="font-semibold text-ink">Warszawa Centralna</span>
+            <!-- Transfer -->
+            <div class="ticket-divider"></div>
+            <div class="px-5 py-3.5 bg-surface-sunken">
+              <div class="flex items-center justify-between">
+                <div class="text-[0.8125rem] text-ink-muted">
+                  Przesiadka: <span class="font-semibold text-ink">Warszawa Centralna</span>
+                </div>
+                <div class="font-ticket text-[0.75rem]">
+                  <span class="font-semibold text-delay-warn">12 min</span>
+                  <span class="text-ink-faint"> / 30</span>
+                </div>
+              </div>
             </div>
-            <div class="font-ticket text-[0.75rem]">
-              <span class="font-semibold text-delay-warn">12 min</span>
-              <span class="text-ink-faint"> / 30</span>
-            </div>
-          </div>
-        </div>
-        <div class="ticket-divider"></div>
+            <div class="ticket-divider"></div>
 
-        <!-- Train 2 -->
-        <div class="p-5 pb-4">
-          <div class="flex items-center justify-between mb-4">
-            <div class="flex items-center gap-2.5">
-              <span class="font-ticket font-semibold text-[0.875rem] text-ink">EIC 1701</span>
-              <span class="badge badge-safe">Punktualnie</span>
+            <!-- Train 2 (mock second leg) -->
+            <div class="p-5 pb-4">
+              <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2.5">
+                  <span class="font-ticket font-semibold text-[0.875rem] text-ink">EIC 1701</span>
+                  <span class="badge badge-safe">Punktualnie</span>
+                </div>
+                <span class="font-ticket text-[0.6875rem] text-ink-faint">Przykład</span>
+              </div>
+              <div class="route-line">
+                <div class="text-right min-w-[4.5rem]">
+                  <div class="font-ticket font-medium text-[0.875rem] text-ink">14:15</div>
+                  <div class="text-[0.6875rem] text-ink-faint">Warszawa C.</div>
+                </div>
+                <div class="route-dot bg-delay-safe"></div>
+                <div class="route-dash"></div>
+                <div class="route-duration">3h 21m</div>
+                <div class="route-dash"></div>
+                <div class="route-dot bg-ink-faint"></div>
+                <div class="min-w-[4.5rem]">
+                  <div class="font-ticket font-medium text-[0.875rem] text-ink">17:36</div>
+                  <div class="text-[0.6875rem] text-ink-faint">Gdańsk Gł.</div>
+                </div>
+              </div>
             </div>
-            <span class="font-ticket text-[0.6875rem] text-ink-faint">26.03.2026</span>
-          </div>
-          <div class="route-line">
-            <div class="text-right min-w-[4.5rem]">
-              <div class="font-ticket font-medium text-[0.875rem] text-ink">14:15</div>
-              <div class="text-[0.6875rem] text-ink-faint">Warszawa C.</div>
+          </Fragment>
+        ) : (
+          <!-- Hardcoded mock ticket -->
+          <Fragment>
+            <!-- Train 1 -->
+            <div class="p-5 pb-4">
+              <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2.5">
+                  <span class="font-ticket font-semibold text-[0.875rem] text-ink">IC 5313</span>
+                  <span class="badge badge-warn">+18 min</span>
+                </div>
+                <span class="font-ticket text-[0.6875rem] text-ink-faint">26.03.2026</span>
+              </div>
+              <div class="route-line">
+                <div class="text-right min-w-[4.5rem]">
+                  <div class="font-ticket font-medium text-[0.875rem] text-ink">11:10</div>
+                  <div class="text-[0.6875rem] text-ink-faint">Kraków Gł.</div>
+                </div>
+                <div class="route-dot bg-brand-500"></div>
+                <div class="route-dash"></div>
+                <div class="route-duration">2h 53m</div>
+                <div class="route-dash"></div>
+                <div class="route-dot bg-ink-faint"></div>
+                <div class="min-w-[4.5rem]">
+                  <div class="font-ticket font-medium text-[0.875rem] text-ink">
+                    <span class="line-through text-ink-faint decoration-ink-faint/50">13:45</span>
+                    <span class="text-delay-warn ml-1">14:03</span>
+                  </div>
+                  <div class="text-[0.6875rem] text-ink-faint">Warszawa C.</div>
+                </div>
+              </div>
             </div>
-            <div class="route-dot bg-delay-safe"></div>
-            <div class="route-dash"></div>
-            <div class="route-duration">3h 21m</div>
-            <div class="route-dash"></div>
-            <div class="route-dot bg-ink-faint"></div>
-            <div class="min-w-[4.5rem]">
-              <div class="font-ticket font-medium text-[0.875rem] text-ink">17:36</div>
-              <div class="text-[0.6875rem] text-ink-faint">Gdańsk Gł.</div>
+
+            <!-- Transfer -->
+            <div class="ticket-divider"></div>
+            <div class="px-5 py-3.5 bg-surface-sunken">
+              <div class="flex items-center justify-between">
+                <div class="text-[0.8125rem] text-ink-muted">
+                  Przesiadka: <span class="font-semibold text-ink">Warszawa Centralna</span>
+                </div>
+                <div class="font-ticket text-[0.75rem]">
+                  <span class="font-semibold text-delay-warn">12 min</span>
+                  <span class="text-ink-faint"> / 30</span>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+            <div class="ticket-divider"></div>
+
+            <!-- Train 2 -->
+            <div class="p-5 pb-4">
+              <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-2.5">
+                  <span class="font-ticket font-semibold text-[0.875rem] text-ink">EIC 1701</span>
+                  <span class="badge badge-safe">Punktualnie</span>
+                </div>
+                <span class="font-ticket text-[0.6875rem] text-ink-faint">26.03.2026</span>
+              </div>
+              <div class="route-line">
+                <div class="text-right min-w-[4.5rem]">
+                  <div class="font-ticket font-medium text-[0.875rem] text-ink">14:15</div>
+                  <div class="text-[0.6875rem] text-ink-faint">Warszawa C.</div>
+                </div>
+                <div class="route-dot bg-delay-safe"></div>
+                <div class="route-dash"></div>
+                <div class="route-duration">3h 21m</div>
+                <div class="route-dash"></div>
+                <div class="route-dot bg-ink-faint"></div>
+                <div class="min-w-[4.5rem]">
+                  <div class="font-ticket font-medium text-[0.875rem] text-ink">17:36</div>
+                  <div class="text-[0.6875rem] text-ink-faint">Gdańsk Gł.</div>
+                </div>
+              </div>
+            </div>
+          </Fragment>
+        )}
 
         <!-- CTA — push monthly -->
         <div class="p-5 bg-brand-50 border-t border-brand-200">
@@ -362,8 +449,8 @@ const liveStats = todayData?.stats;
       <div class="max-w-md mx-auto text-center">
         <h2 class="text-xl font-bold text-ink mb-2 tracking-tight">Sprawdź opóźnienie pociągu</h2>
         <p class="text-[0.875rem] text-ink-muted mb-5">Bez przesiadki? Sprawdź czy Twój pociąg jedzie na czas.</p>
-        <form id="delay-check-form" class="flex gap-2.5" action="/gdzie-jest-pociag">
-          <input type="text" placeholder="Numer pociągu, np. IC 350" class="input input-mono" />
+        <form action="/gdzie-jest-pociag" method="GET" class="flex gap-2.5">
+          <input type="text" name="q" placeholder="Numer pociągu, np. IC 350" class="input input-mono" />
           <button type="submit" class="btn-secondary shrink-0">Sprawdź</button>
         </form>
       </div>

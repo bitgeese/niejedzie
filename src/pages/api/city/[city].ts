@@ -8,44 +8,17 @@ export const prerender = false;
 import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
 
-// ── City → Station mapping ─────────────────────────────────────────────
+// ── City → Prefix mapping (LIKE-based matching for station names) ─────
 
-const CITY_STATIONS: Record<string, { display: string; patterns: string[] }> = {
-  warszawa: {
-    display: 'Warszawa',
-    patterns: [
-      'Warszawa Centralna', 'Warszawa Wschodnia', 'Warszawa Zachodnia',
-      'Warszawa Gdańska', 'Warszawa Wileńska',
-    ],
-  },
-  krakow: {
-    display: 'Kraków',
-    patterns: ['Kraków Główny', 'Kraków Płaszów', 'Kraków Łobzów'],
-  },
-  gdansk: {
-    display: 'Gdańsk',
-    patterns: ['Gdańsk Główny', 'Gdańsk Wrzeszcz', 'Gdańsk Oliwa'],
-  },
-  wroclaw: {
-    display: 'Wrocław',
-    patterns: ['Wrocław Główny', 'Wrocław Mikołajów'],
-  },
-  poznan: {
-    display: 'Poznań',
-    patterns: ['Poznań Główny', 'Poznań Wschód'],
-  },
-  katowice: {
-    display: 'Katowice',
-    patterns: ['Katowice', 'Katowice Ligota'],
-  },
-  szczecin: {
-    display: 'Szczecin',
-    patterns: ['Szczecin Główny', 'Szczecin Dąbie'],
-  },
-  lodz: {
-    display: 'Łódź',
-    patterns: ['Łódź Fabryczna', 'Łódź Kaliska', 'Łódź Widzew'],
-  },
+const CITY_PREFIXES: Record<string, { display: string; prefixes: string[] }> = {
+  warszawa: { display: 'Warszawa', prefixes: ['Warszawa%'] },
+  krakow:   { display: 'Kraków',   prefixes: ['Kraków%', 'Krakow%'] },
+  gdansk:   { display: 'Gdańsk',   prefixes: ['Gdańsk%', 'Gdansk%'] },
+  wroclaw:  { display: 'Wrocław',  prefixes: ['Wrocław%', 'Wroclaw%'] },
+  poznan:   { display: 'Poznań',   prefixes: ['Poznań%', 'Poznan%'] },
+  katowice: { display: 'Katowice', prefixes: ['Katowice%'] },
+  szczecin: { display: 'Szczecin', prefixes: ['Szczecin%'] },
+  lodz:     { display: 'Łódź',     prefixes: ['Łódź%', 'Lodz%'] },
 };
 
 interface CityTodayStats {
@@ -79,32 +52,44 @@ export const GET: APIRoute = async ({ params }) => {
   try {
     const citySlug = params.city?.toLowerCase();
 
-    if (!citySlug || !CITY_STATIONS[citySlug]) {
+    if (!citySlug || !CITY_PREFIXES[citySlug]) {
       return new Response(
-        JSON.stringify({ error: 'Unknown city', validCities: Object.keys(CITY_STATIONS) }),
+        JSON.stringify({ error: 'Unknown city', validCities: Object.keys(CITY_PREFIXES) }),
         { status: 404, headers: { 'Content-Type': 'application/json' } },
       );
     }
 
-    const cityConfig = CITY_STATIONS[citySlug];
+    const cityConfig = CITY_PREFIXES[citySlug];
     const today = new Date().toISOString().split('T')[0];
 
-    // Build SQL WHERE clause for station matching
-    const stationPlaceholders = cityConfig.patterns.map(() => 'station_name = ?').join(' OR ');
-    const stationBindings = cityConfig.patterns;
+    // Build SQL WHERE clause for prefix-based LIKE matching
+    const likeClauses = cityConfig.prefixes.map(() => 'station_name LIKE ?').join(' OR ');
+    const likeBindings = cityConfig.prefixes;
 
     // ── Today's stats ────────────────────────────────────────────────
     const todayRow = await env.DB.prepare(`
       SELECT
         COUNT(DISTINCT schedule_id || '-' || order_id) AS train_count,
-        AVG(COALESCE(arrival_delay, departure_delay, 0)) AS avg_delay,
-        SUM(CASE WHEN COALESCE(arrival_delay, departure_delay, 0) <= 5 THEN 1 ELSE 0 END) AS on_time
+        AVG(COALESCE(arrival_delay, departure_delay, 0)) AS avg_delay
       FROM delay_snapshots
-      WHERE operating_date = ? AND (${stationPlaceholders})
-    `).bind(today, ...stationBindings).first();
+      WHERE operating_date = ? AND (${likeClauses})
+    `).bind(today, ...likeBindings).first();
 
     const trainCount = (todayRow?.train_count as number) || 0;
-    const onTime = (todayRow?.on_time as number) || 0;
+
+    // Punctuality = trains with max delay <= 5 min / total trains
+    const punctualityRow = await env.DB.prepare(`
+      SELECT COUNT(*) AS on_time FROM (
+        SELECT schedule_id, order_id,
+               MAX(COALESCE(arrival_delay, departure_delay, 0)) AS max_delay
+        FROM delay_snapshots
+        WHERE operating_date = ? AND (${likeClauses})
+        GROUP BY schedule_id, order_id
+        HAVING max_delay <= 5
+      )
+    `).bind(today, ...likeBindings).first();
+
+    const onTime = (punctualityRow?.on_time as number) || 0;
 
     const todayStats: CityTodayStats = {
       trainCount,
@@ -123,12 +108,12 @@ export const GET: APIRoute = async ({ params }) => {
         ds.station_name
       FROM delay_snapshots ds
       LEFT JOIN trains t ON t.schedule_id = ds.schedule_id AND t.order_id = ds.order_id
-      WHERE ds.operating_date = ? AND (${stationPlaceholders})
+      WHERE ds.operating_date = ? AND (${likeClauses})
       GROUP BY ds.schedule_id, ds.order_id
       HAVING max_delay > 0
       ORDER BY max_delay DESC
       LIMIT 10
-    `).bind(today, ...stationBindings).all();
+    `).bind(today, ...likeBindings).all();
 
     const topDelayed: CityTopDelayed[] = (topRows.results || []).map((r) => ({
       trainNumber: r.train_number as string,

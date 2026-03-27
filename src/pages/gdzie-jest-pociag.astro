@@ -1,18 +1,148 @@
 ---
+export const prerender = false;
+
 import Base from '../layouts/Base.astro';
 import StatCard from '../components/StatCard.astro';
 import StationTimeline from '../components/StationTimeline.astro';
 
-const stations = [
-  { name: 'Kraków Główny', plannedDep: '11:10', actualDep: '11:14', delay: 4, passed: true, current: false },
-  { name: 'Miechów', plannedArr: '11:42', actualArr: '11:49', delay: 7, passed: true, current: false },
-  { name: 'Kielce', plannedArr: '12:31', actualArr: '12:49', delay: 18, passed: true, current: true },
-  { name: 'Radom', plannedArr: '13:08', delay: 0, passed: false, current: false },
-  { name: 'Warszawa Centralna', plannedArr: '13:45', delay: 0, passed: false, current: false },
-];
+// ── Search logic ────────────────────────────────────────────────────────
+const searchQuery = Astro.url.searchParams.get('q')?.trim() || '';
+let searchResult: any = null;
+let searchError = '';
+
+if (searchQuery) {
+  const baseUrl = import.meta.env.PROD ? 'https://niejedzie.pl' : 'http://localhost:4321';
+  try {
+    const res = await fetch(`${baseUrl}/api/train/search?q=${encodeURIComponent(searchQuery)}`);
+    if (res.ok) {
+      searchResult = await res.json();
+      if (searchResult?.error && !searchResult?.train) {
+        searchError = searchResult.error;
+      }
+    }
+  } catch {}
+}
+
+const hasSearchResult = searchResult?.train && searchResult?.stations?.length > 0;
+
+// ── Map API stations to StationTimeline format ──────────────────────────
+const stations = hasSearchResult
+  ? searchResult.stations.map((s: any) => ({
+      name: s.name,
+      plannedArr: s.plannedArr || undefined,
+      plannedDep: s.plannedDep || undefined,
+      actualArr: s.actualArr || undefined,
+      actualDep: s.actualDep || undefined,
+      delay: s.delay,
+      passed: s.passed,
+      current: s.current,
+    }))
+  : [
+      { name: 'Kraków Główny', plannedDep: '11:10', actualDep: '11:14', delay: 4, passed: true, current: false },
+      { name: 'Miechów', plannedArr: '11:42', actualArr: '11:49', delay: 7, passed: true, current: false },
+      { name: 'Kielce', plannedArr: '12:31', actualArr: '12:49', delay: 18, passed: true, current: true },
+      { name: 'Radom', plannedArr: '13:08', delay: 0, passed: false, current: false },
+      { name: 'Warszawa Centralna', plannedArr: '13:45', delay: 0, passed: false, current: false },
+    ];
+
+// ── Computed values for real data ───────────────────────────────────────
+const currentDelay = hasSearchResult
+  ? Math.max(...searchResult.stations.filter((s: any) => s.passed).map((s: any) => s.delay), 0)
+  : 18;
+
+const passedCount = hasSearchResult
+  ? searchResult.stations.filter((s: any) => s.passed).length
+  : 3;
+
+const totalCount = hasSearchResult
+  ? searchResult.stations.length
+  : 5;
+
+const lastStation = hasSearchResult
+  ? searchResult.stations.filter((s: any) => s.current)?.[0]?.name
+    || searchResult.stations.filter((s: any) => s.passed).at(-1)?.name
+    || ''
+  : 'Kielce';
+
+// Estimate arrival: last station's planned arrival + current delay
+const routeEnd = hasSearchResult ? searchResult.train.routeEnd : 'Warszawa C.';
+const routeStart = hasSearchResult ? searchResult.train.routeStart : 'Kraków Gł.';
+const trainNumber = hasSearchResult ? searchResult.train.trainNumber : 'IC 5313';
+const carrier = hasSearchResult ? searchResult.train.carrier : 'PKP Intercity';
+
+// First station departure and last station arrival for the route card
+const firstStation = hasSearchResult ? searchResult.stations[0] : null;
+const lastStationData = hasSearchResult ? searchResult.stations[searchResult.stations.length - 1] : null;
+
+const depTime = hasSearchResult
+  ? (firstStation?.plannedDep || firstStation?.plannedArr || '')
+  : '11:10';
+
+const arrTime = hasSearchResult
+  ? (lastStationData?.plannedArr || lastStationData?.plannedDep || '')
+  : '13:45';
+
+// Compute estimated arrival with delay
+function addMinutesToTime(time: string, minutes: number): string {
+  if (!time || minutes <= 0) return time;
+  const [h, m] = time.split(':').map(Number);
+  const totalMinutes = h * 60 + m + minutes;
+  const newH = Math.floor(totalMinutes / 60) % 24;
+  const newM = totalMinutes % 60;
+  return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
+}
+
+const estArrival = hasSearchResult
+  ? (currentDelay > 0 ? '~' + addMinutesToTime(arrTime, currentDelay) : arrTime)
+  : '~14:03';
+
+// Duration between dep and arr
+function timeDiff(t1: string, t2: string): string {
+  if (!t1 || !t2) return '';
+  const [h1, m1] = t1.split(':').map(Number);
+  const [h2, m2] = t2.split(':').map(Number);
+  let diff = (h2 * 60 + m2) - (h1 * 60 + m1);
+  if (diff < 0) diff += 24 * 60;
+  const hours = Math.floor(diff / 60);
+  const mins = diff % 60;
+  return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+}
+
+const duration = timeDiff(depTime, arrTime);
+
+// Today's date formatted
+const now = new Date();
+const todayFormatted = now.toLocaleDateString('pl-PL', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+// Chart data from passed stations
+const chartStations = hasSearchResult
+  ? searchResult.stations.filter((s: any) => s.passed).map((s: any) => s.name)
+  : ['Kraków Gł.', 'Miechów', 'Kielce'];
+
+const chartDelays = hasSearchResult
+  ? searchResult.stations.filter((s: any) => s.passed).map((s: any) => s.delay)
+  : [4, 7, 18];
+
+// Shorten station names for chart (max ~15 chars)
+function shortName(name: string): string {
+  return name
+    .replace(' Główny', ' Gł.')
+    .replace(' Główna', ' Gł.')
+    .replace(' Centralny', ' C.')
+    .replace(' Centralna', ' C.')
+    .replace(' Zachodni', ' Zach.')
+    .replace(' Wschodni', ' Wsch.');
+}
+
+const chartCategories = chartStations.map(shortName);
+const chartMax = Math.max(...chartDelays, 10) + 5;
+
+// Delay badge type
+const delayBadgeClass = currentDelay === 0 ? 'badge-safe' : currentDelay <= 10 ? 'badge-warn' : 'badge-danger';
+const delayBadgeText = currentDelay === 0 ? 'Punktualnie' : `+${currentDelay} min`;
 ---
 <Base
-  title="Gdzie jest pociąg — śledzenie pociągu na żywo"
+  title={hasSearchResult ? `${trainNumber} — śledzenie pociągu` : "Gdzie jest pociąg — śledzenie pociągu na żywo"}
   description="Sprawdź gdzie jest Twój pociąg. Śledzenie pociągów PKP Intercity, Polregio, SKM i KM w czasie rzeczywistym. Wpisz numer pociągu i zobacz aktualne opóźnienie."
 >
   <slot name="head">
@@ -36,12 +166,19 @@ const stations = [
       <p class="text-[1rem] text-white/50 max-w-md mx-auto leading-relaxed mb-3">
         Wpisz numer pociągu i&nbsp;sprawdź aktualną pozycję, opóźnienie i&nbsp;przystanki na trasie.
       </p>
-      <p class="font-ticket text-[0.625rem] text-brand-300/60 uppercase tracking-widest mb-8">// wersja demo — wkrótce wyszukiwanie na żywo</p>
+      {!hasSearchResult && !searchQuery && (
+        <p class="font-ticket text-[0.625rem] text-brand-300/60 uppercase tracking-widest mb-8">// wersja demo — wkrótce wyszukiwanie na żywo</p>
+      )}
+      {(hasSearchResult || searchQuery) && (
+        <div class="mb-8"></div>
+      )}
 
       <div class="max-w-md mx-auto">
-        <form class="flex gap-2.5" id="train-search-form">
+        <form class="flex gap-2.5" action="/gdzie-jest-pociag" method="GET">
           <input
             type="text"
+            name="q"
+            value={searchQuery}
             placeholder="Wpisz numer pociągu"
             class="input input-mono text-center text-lg"
             id="train-search-input"
@@ -56,79 +193,123 @@ const stations = [
     </div>
   </section>
 
-  <!-- Mock result for IC 5313 -->
+  <!-- Search result or demo -->
   <section class="max-w-5xl mx-auto px-5 -mt-4 mb-8">
     <div class="max-w-2xl mx-auto">
 
-      <!-- Train header card -->
-      <div class="ticket-card rounded-2xl overflow-hidden shadow-lg mb-6">
-        <div class="p-5 pb-4">
-          <div class="flex items-center justify-between mb-3">
-            <div class="flex items-center gap-2.5">
-              <span class="font-ticket font-semibold text-[1rem] text-ink">IC 5313</span>
-              <span class="text-[0.75rem] text-ink-muted">&middot;</span>
-              <span class="text-[0.8125rem] text-ink-muted font-medium">PKP Intercity</span>
-            </div>
-            <span class="font-ticket text-[0.6875rem] text-ink-faint">26.03.2026</span>
-          </div>
-
-          <div class="route-line mb-4">
-            <div class="text-right min-w-[5rem]">
-              <div class="font-ticket font-medium text-[0.875rem] text-ink">11:10</div>
-              <div class="text-[0.6875rem] text-ink-faint">Kraków Gł.</div>
-            </div>
-            <div class="route-dot bg-brand-500"></div>
-            <div class="route-dash"></div>
-            <div class="route-duration">2h 35m</div>
-            <div class="route-dash"></div>
-            <div class="route-dot bg-ink-faint"></div>
-            <div class="min-w-[5rem]">
-              <div class="font-ticket font-medium text-[0.875rem] text-ink">
-                <span class="line-through text-ink-faint decoration-ink-faint/50">13:45</span>
-                <span class="text-delay-warn ml-1">~14:03</span>
+      {/* Not found state */}
+      {searchQuery && !hasSearchResult && (
+        <div class="ticket-card rounded-2xl overflow-hidden shadow-lg mb-6">
+          <div class="p-6 text-center">
+            <p class="text-[1.125rem] font-bold text-ink mb-2">
+              {searchError || `Nie znaleziono pociągu "${searchQuery}"`}
+            </p>
+            {searchResult?.suggestions?.length > 0 && (
+              <div class="mt-4">
+                <p class="text-[0.8125rem] text-ink-muted mb-3">Może chodziło Ci o:</p>
+                <div class="flex flex-wrap gap-2 justify-center">
+                  {searchResult.suggestions.map((s: string) => (
+                    <a
+                      href={`/gdzie-jest-pociag?q=${encodeURIComponent(s)}`}
+                      class="badge badge-warn text-[0.75rem]"
+                    >
+                      {s}
+                    </a>
+                  ))}
+                </div>
               </div>
-              <div class="text-[0.6875rem] text-ink-faint">Warszawa C.</div>
+            )}
+            <a href="/gdzie-jest-pociag" class="inline-block mt-4 text-[0.875rem] text-brand-500 hover:text-brand-600 underline underline-offset-2 transition-colors">
+              Wróć do wyszukiwarki
+            </a>
+          </div>
+        </div>
+      )}
+
+      {/* Train result — real data or demo */}
+      {(hasSearchResult || !searchQuery) && (
+        <>
+          {/* Train header card */}
+          <div class="ticket-card rounded-2xl overflow-hidden shadow-lg mb-6">
+            <div class="p-5 pb-4">
+              <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2.5">
+                  <span class="font-ticket font-semibold text-[1rem] text-ink">{trainNumber}</span>
+                  <span class="text-[0.75rem] text-ink-muted">&middot;</span>
+                  <span class="text-[0.8125rem] text-ink-muted font-medium">{carrier}</span>
+                </div>
+                <span class="font-ticket text-[0.6875rem] text-ink-faint">{todayFormatted}</span>
+              </div>
+
+              <div class="route-line mb-4">
+                <div class="text-right min-w-[5rem]">
+                  <div class="font-ticket font-medium text-[0.875rem] text-ink">{depTime}</div>
+                  <div class="text-[0.6875rem] text-ink-faint">{shortName(routeStart)}</div>
+                </div>
+                <div class="route-dot bg-brand-500"></div>
+                <div class="route-dash"></div>
+                <div class="route-duration">{duration}</div>
+                <div class="route-dash"></div>
+                <div class="route-dot bg-ink-faint"></div>
+                <div class="min-w-[5rem]">
+                  <div class="font-ticket font-medium text-[0.875rem] text-ink">
+                    {currentDelay > 0 ? (
+                      <>
+                        <span class="line-through text-ink-faint decoration-ink-faint/50">{arrTime}</span>
+                        <span class="text-delay-warn ml-1">{estArrival}</span>
+                      </>
+                    ) : (
+                      <span>{arrTime}</span>
+                    )}
+                  </div>
+                  <div class="text-[0.6875rem] text-ink-faint">{shortName(routeEnd)}</div>
+                </div>
+              </div>
+
+              <div class="flex items-center gap-3">
+                <span class={`badge ${delayBadgeClass}`}>{delayBadgeText}</span>
+                {lastStation && (
+                  <span class="text-[0.75rem] text-ink-faint">Ostatnia pozycja: {lastStation}</span>
+                )}
+              </div>
             </div>
           </div>
 
-          <div class="flex items-center gap-3">
-            <span class="badge badge-warn">+18 min</span>
-            <span class="text-[0.75rem] text-ink-faint">Ostatnia pozycja: Kielce</span>
+          {/* Station timeline */}
+          <div class="bg-surface-raised rounded-2xl border border-border p-5 mb-6">
+            <p class="section-label mb-5">// trasa pociągu</p>
+            <StationTimeline stations={stations} />
           </div>
-        </div>
-      </div>
 
-      <!-- Station timeline -->
-      <div class="bg-surface-raised rounded-2xl border border-border p-5 mb-6">
-        <p class="section-label mb-5">// trasa pociągu</p>
-        <StationTimeline stations={stations} />
-      </div>
+          {/* Delay progression chart */}
+          {chartDelays.length > 0 && (
+            <div class="bg-surface-raised rounded-2xl border border-border p-5 mb-6">
+              <p class="section-label mb-2">// narastanie opóźnienia</p>
+              <p class="text-[0.8125rem] text-ink-muted mb-4">Jak rosło opóźnienie na kolejnych stacjach</p>
+              <div id="delay-progression-chart" style="min-height: 200px;"></div>
+            </div>
+          )}
 
-      <!-- Delay progression chart -->
-      <div class="bg-surface-raised rounded-2xl border border-border p-5 mb-6">
-        <p class="section-label mb-2">// narastanie opóźnienia</p>
-        <p class="text-[0.8125rem] text-ink-muted mb-4">Jak rosło opóźnienie na kolejnych stacjach</p>
-        <div id="delay-progression-chart" style="min-height: 200px;"></div>
-      </div>
+          {/* Stats row */}
+          <div class="grid grid-cols-3 gap-3 mb-6">
+            <StatCard value={`+${currentDelay}`} label="Opóźnienie (min)" color={currentDelay === 0 ? 'safe' : currentDelay <= 10 ? 'warn' : 'danger'} />
+            <StatCard value={`${passedCount}/${totalCount}`} label="Przystanki" color="brand" />
+            <StatCard value={estArrival} label="Szac. przyjazd" color={currentDelay > 0 ? 'warn' : 'safe'} />
+          </div>
 
-      <!-- Stats row -->
-      <div class="grid grid-cols-3 gap-3 mb-6">
-        <StatCard value="+18" label="Opóźnienie (min)" color="danger" />
-        <StatCard value="3/5" label="Przystanki" color="brand" />
-        <StatCard value="~14:03" label="Szac. przyjazd" color="warn" />
-      </div>
-
-      <!-- CTA card -->
-      <div class="ticket-card rounded-2xl overflow-hidden shadow-lg">
-        <div class="p-6 bg-brand-50 border-t border-brand-200 text-center">
-          <p class="text-[1.0625rem] font-bold text-ink mb-2 tracking-tight">Masz przesiadkę z tym pociągiem?</p>
-          <p class="text-[0.875rem] text-ink-muted mb-5">Włącz monitoring i&nbsp;dostaniesz alert jeśli opóźnienie zagrozi Twojemu połączeniu.</p>
-          <a href="/" class="btn-primary">Monitoruj przesiadkę</a>
-          <p class="text-center text-[0.6875rem] text-ink-faint mt-3">
-            Jednorazowo 5 zł lub <a href="/cennik" class="underline underline-offset-2 hover:text-ink transition-colors">15 zł/msc bez limitu</a>
-          </p>
-        </div>
-      </div>
+          {/* CTA card */}
+          <div class="ticket-card rounded-2xl overflow-hidden shadow-lg">
+            <div class="p-6 bg-brand-50 border-t border-brand-200 text-center">
+              <p class="text-[1.0625rem] font-bold text-ink mb-2 tracking-tight">Masz przesiadkę z tym pociągiem?</p>
+              <p class="text-[0.875rem] text-ink-muted mb-5">Włącz monitoring i&nbsp;dostaniesz alert jeśli opóźnienie zagrozi Twojemu połączeniu.</p>
+              <a href="/" class="btn-primary">Monitoruj przesiadkę</a>
+              <p class="text-center text-[0.6875rem] text-ink-faint mt-3">
+                Jednorazowo 5 zł lub <a href="/cennik" class="underline underline-offset-2 hover:text-ink transition-colors">15 zł/msc bez limitu</a>
+              </p>
+            </div>
+          </div>
+        </>
+      )}
 
     </div>
   </section>
@@ -152,7 +333,7 @@ const stations = [
       <h3 class="text-[1.125rem] font-bold text-ink tracking-tight mt-8 mb-3">Często szukane pociągi</h3>
       <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
         {['IC 5313', 'EIC 1701', 'TLK 38103', 'IC 350', 'EIC 1100', 'IC 6103', 'TLK 51100', 'R 94531'].map(train => (
-          <a href="/gdzie-jest-pociag" class="ticket-card rounded-lg p-3 text-center font-ticket text-[0.8125rem] font-medium text-ink hover:text-brand-500 transition-colors">
+          <a href={`/gdzie-jest-pociag?q=${encodeURIComponent(train)}`} class="ticket-card rounded-lg p-3 text-center font-ticket text-[0.8125rem] font-medium text-ink hover:text-brand-500 transition-colors">
             {train}
           </a>
         ))}
@@ -172,11 +353,17 @@ const stations = [
   </section>
 
   <!-- Delay progression chart script -->
+  <script define:vars={{ chartCategories, chartDelays, chartMax }}>
+    // These variables are injected from the server
+    window.__chartData = { categories: chartCategories, delays: chartDelays, max: chartMax };
+  </script>
   <script>
     import ApexCharts from 'apexcharts';
 
     const chartEl = document.querySelector('#delay-progression-chart');
-    if (chartEl) {
+    const chartData = (window as any).__chartData || { categories: [], delays: [], max: 25 };
+
+    if (chartEl && chartData.delays.length > 0) {
       const options = {
         chart: {
           type: 'area',
@@ -193,7 +380,7 @@ const stations = [
         },
         series: [{
           name: 'Opóźnienie',
-          data: [4, 7, 18],
+          data: chartData.delays,
         }],
         colors: ['#c2410c'],
         fill: {
@@ -218,7 +405,7 @@ const stations = [
           yaxis: { lines: { show: true } },
         },
         xaxis: {
-          categories: ['Kraków Gł.', 'Miechów', 'Kielce'],
+          categories: chartData.categories,
           labels: {
             style: {
               fontFamily: 'JetBrains Mono, monospace',
@@ -231,7 +418,7 @@ const stations = [
         },
         yaxis: {
           min: 0,
-          max: 25,
+          max: chartData.max,
           labels: {
             style: {
               fontFamily: 'JetBrains Mono, monospace',
