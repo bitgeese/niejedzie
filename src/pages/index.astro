@@ -135,76 +135,44 @@ const exampleTrain = liveTopTrain ? {
     <div class="max-w-md mx-auto">
       <div class="ticket-card rounded-2xl overflow-hidden shadow-lg">
         {exampleTrain ? (
-          <!-- Live data ticket -->
+          <!-- Live delayed train -->
           <Fragment>
-            <div class="p-5 pb-4">
+            <div class="p-5">
+              <div class="flex items-center justify-between mb-1">
+                <span class="font-ticket text-[0.625rem] text-brand-500 uppercase tracking-wider">Opóźniony teraz</span>
+                <span class="font-ticket text-[0.625rem] text-ink-faint uppercase tracking-wider">Dane na żywo</span>
+              </div>
               <div class="flex items-center justify-between mb-4">
                 <div class="flex items-center gap-2.5">
-                  <span class="font-ticket font-semibold text-[0.875rem] text-ink">{exampleTrain.number}</span>
-                  <span class={`badge ${exampleTrain.delay > 15 ? 'badge-danger' : exampleTrain.delay > 5 ? 'badge-warn' : 'badge-safe'}`}>
-                    {exampleTrain.delay > 0 ? `+${exampleTrain.delay} min` : 'Punktualnie'}
+                  <span class="font-ticket font-semibold text-[1rem] text-ink">{exampleTrain.number}</span>
+                  <span class={`badge ${exampleTrain.delay > 30 ? 'badge-danger' : 'badge-warn'}`}>
+                    +{exampleTrain.delay} min
                   </span>
                 </div>
-                <span class="font-ticket text-[0.6875rem] text-brand-500">Dane na żywo</span>
-              </div>
-              {exampleTrain.route && (
-                <div class="route-line">
-                  <div class="text-right min-w-[4.5rem]">
-                    <div class="font-ticket font-medium text-[0.875rem] text-ink">--:--</div>
-                    <div class="text-[0.6875rem] text-ink-faint">{exampleTrain.route.split(' → ')[0] || '—'}</div>
-                  </div>
-                  <div class={`route-dot ${exampleTrain.delay > 5 ? 'bg-delay-warn' : 'bg-brand-500'}`}></div>
-                  <div class="route-dash"></div>
-                  <div class="route-duration">{exampleTrain.carrier}</div>
-                  <div class="route-dash"></div>
-                  <div class={`route-dot ${exampleTrain.delay > 5 ? 'bg-delay-warn' : 'bg-ink-faint'}`}></div>
-                  <div class="min-w-[4.5rem]">
-                    <div class="font-ticket font-medium text-[0.875rem] text-ink">--:--</div>
-                    <div class="text-[0.6875rem] text-ink-faint">{exampleTrain.route.split(' → ')[1] || '—'}</div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <!-- Transfer -->
-            <div class="ticket-divider"></div>
-            <div class="px-5 py-3.5 bg-surface-sunken">
-              <div class="flex items-center justify-between">
-                <div class="text-[0.8125rem] text-ink-muted">
-                  Przesiadka: <span class="font-semibold text-ink">Warszawa Centralna</span>
-                </div>
-                <div class="font-ticket text-[0.75rem]">
-                  <span class="font-semibold text-delay-warn">12 min</span>
-                  <span class="text-ink-faint"> / 30</span>
-                </div>
-              </div>
-            </div>
-            <div class="ticket-divider"></div>
-
-            <!-- Train 2 (mock second leg) -->
-            <div class="p-5 pb-4">
-              <div class="flex items-center justify-between mb-4">
-                <div class="flex items-center gap-2.5">
-                  <span class="font-ticket font-semibold text-[0.875rem] text-ink">EIC 1701</span>
-                  <span class="badge badge-safe">Punktualnie</span>
-                </div>
-                <span class="font-ticket text-[0.6875rem] text-ink-faint">Przykład</span>
               </div>
               <div class="route-line">
-                <div class="text-right min-w-[4.5rem]">
-                  <div class="font-ticket font-medium text-[0.875rem] text-ink">14:15</div>
-                  <div class="text-[0.6875rem] text-ink-faint">Warszawa C.</div>
+                <div class="text-right min-w-[5rem]">
+                  <div class="text-[0.75rem] text-ink-faint">{exampleTrain.route.split(' → ')[0] || '—'}</div>
                 </div>
-                <div class="route-dot bg-delay-safe"></div>
+                <div class={`route-dot ${exampleTrain.delay > 15 ? 'bg-delay-danger' : 'bg-delay-warn'}`}></div>
                 <div class="route-dash"></div>
-                <div class="route-duration">3h 21m</div>
+                <div class="route-duration font-semibold text-ink-muted">{exampleTrain.carrier}</div>
                 <div class="route-dash"></div>
                 <div class="route-dot bg-ink-faint"></div>
-                <div class="min-w-[4.5rem]">
-                  <div class="font-ticket font-medium text-[0.875rem] text-ink">17:36</div>
-                  <div class="text-[0.6875rem] text-ink-faint">Gdańsk Gł.</div>
+                <div class="min-w-[5rem]">
+                  <div class="text-[0.75rem] text-ink-faint">{exampleTrain.route.split(' → ')[1] || '—'}</div>
                 </div>
               </div>
+            </div>
+
+            <div class="ticket-divider"></div>
+
+            <!-- What if you had a connection? -->
+            <div class="px-5 py-4 bg-surface-sunken">
+              <p class="text-[0.8125rem] text-ink-muted text-center">
+                A co jeśli masz z tego pociągu <span class="font-semibold text-ink">przesiadkę</span>?<br/>
+                <span class="text-[0.75rem]">Monitorujemy opóźnienie i powiadomimy Cię jeśli zagrozi połączeniu.</span>
+              </p>
             </div>
           </Fragment>
         ) : (
