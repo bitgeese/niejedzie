@@ -1,0 +1,179 @@
+---
+/**
+ * Site-wide data quality banner
+ * Automatically shows quality warnings based on current data status
+ */
+
+interface QualityStatus {
+  status: 'healthy' | 'degraded' | 'critical';
+  lastCheck: string;
+  issueCount: number;
+  issues: Array<{
+    type: string;
+    severity: 'warning' | 'error' | 'critical';
+    message: string;
+    count?: number;
+  }>;
+}
+
+// Fetch current quality status
+let qualityStatus: QualityStatus = {
+  status: 'healthy',
+  lastCheck: new Date().toISOString(),
+  issueCount: 0,
+  issues: []
+};
+
+try {
+  const qualityResponse = await fetch(`${Astro.site}/api/quality`);
+  if (qualityResponse.ok) {
+    qualityStatus = await qualityResponse.json();
+  }
+} catch (error) {
+  console.error('[DataQualityBanner] Failed to fetch quality status:', error);
+  qualityStatus.status = 'critical';
+  qualityStatus.issues = [{
+    type: 'api_error',
+    severity: 'critical',
+    message: 'Nie można sprawdzić jakości danych'
+  }];
+}
+
+// Don't show banner if quality is healthy
+const shouldShowBanner = qualityStatus.status !== 'healthy' || qualityStatus.issueCount > 0;
+
+// Calculate time since last check
+const lastCheckTime = new Date(qualityStatus.lastCheck);
+const minutesSinceCheck = Math.round((Date.now() - lastCheckTime.getTime()) / 60000);
+
+// Get critical and error issues for display
+const criticalIssues = qualityStatus.issues.filter(i => i.severity === 'critical');
+const errorIssues = qualityStatus.issues.filter(i => i.severity === 'error');
+const warningIssues = qualityStatus.issues.filter(i => i.severity === 'warning');
+---
+
+{shouldShowBanner && (
+  <div class="quality-banner mb-4">
+    <!-- Critical Issues Banner -->
+    {qualityStatus.status === 'critical' && (
+      <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+        <div class="flex">
+          <div class="flex-shrink-0">
+            <span class="text-red-500 text-lg">🚨</span>
+          </div>
+          <div class="ml-3 flex-1">
+            <h3 class="text-sm font-semibold text-red-800">
+              Poważne problemy z danymi
+            </h3>
+            <div class="mt-2 text-sm text-red-700">
+              <p>
+                Obecnie występują problemy z systemami kolejowymi.
+                Dane mogą być nieaktualne lub niepełne.
+              </p>
+              {criticalIssues.length > 0 && (
+                <ul class="mt-2 list-disc list-inside space-y-1">
+                  {criticalIssues.map(issue => (
+                    <li>{issue.message}</li>
+                  ))}
+                </ul>
+              )}
+              <p class="mt-2 text-xs">
+                Sprawdzane: {minutesSinceCheck < 5 ? 'przed chwilą' : `${minutesSinceCheck} min temu`}
+              </p>
+            </div>
+          </div>
+          <div class="ml-3 flex-shrink-0">
+            <a
+              href="/api/quality"
+              class="text-red-600 hover:text-red-500 text-xs underline"
+              target="_blank"
+            >
+              Szczegóły →
+            </a>
+          </div>
+        </div>
+      </div>
+    )}
+
+    <!-- Degraded Quality Warning -->
+    {qualityStatus.status === 'degraded' && (
+      <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+        <div class="flex">
+          <div class="flex-shrink-0">
+            <span class="text-yellow-600 text-lg">⚠️</span>
+          </div>
+          <div class="ml-3 flex-1">
+            <h3 class="text-sm font-semibold text-yellow-800">
+              Ograniczona jakość danych
+            </h3>
+            <div class="mt-2 text-sm text-yellow-700">
+              <p>
+                Niektóre dane mogą być niepełne lub opóźnione.
+                Weryfikujemy źródła alternatywne.
+              </p>
+              {(errorIssues.length > 0 || warningIssues.length > 0) && (
+                <details class="mt-2">
+                  <summary class="cursor-pointer text-xs font-medium">
+                    Wykryte problemy ({errorIssues.length + warningIssues.length})
+                  </summary>
+                  <ul class="mt-1 list-disc list-inside space-y-1 text-xs">
+                    {errorIssues.map(issue => (
+                      <li class="text-red-600">{issue.message}</li>
+                    ))}
+                    {warningIssues.map(issue => (
+                      <li class="text-yellow-600">{issue.message}</li>
+                    ))}
+                  </ul>
+                </details>
+              )}
+            </div>
+          </div>
+          <div class="ml-3 flex-shrink-0">
+            <a
+              href="/api/quality"
+              class="text-yellow-700 hover:text-yellow-600 text-xs underline"
+              target="_blank"
+            >
+              Monitorowanie →
+            </a>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+)}
+
+<style>
+  .quality-banner {
+    animation: slideIn 0.3s ease-out;
+  }
+
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  details > summary {
+    list-style-type: none;
+  }
+
+  details > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  details > summary::before {
+    content: "▶ ";
+    font-size: 0.75em;
+    transition: transform 0.2s;
+  }
+
+  details[open] > summary::before {
+    transform: rotate(90deg);
+  }
+</style>
