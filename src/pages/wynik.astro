@@ -1,5 +1,6 @@
 ---
 import Base from '../layouts/Base.astro';
+import { PRICES } from '../lib/constants';
 
 // Mock data — in production this comes from PKP PLK API
 const train1 = {
@@ -155,7 +156,7 @@ const bufferColor = transfer.currentBuffer > 20 ? 'green' : transfer.currentBuff
                 <p class="text-xs text-ink-muted">Nielimitowane przesiadki + dodatkowe funkcje</p>
               </div>
               <div class="text-right">
-                <span class="font-ticket text-lg font-bold text-ink">15 zł</span>
+                <span class="font-ticket text-lg font-bold text-ink">{PRICES.MONTHLY}</span>
                 <span class="text-xs text-ink-faint">/msc</span>
               </div>
             </div>
@@ -187,11 +188,11 @@ const bufferColor = transfer.currentBuffer > 20 ? 'green' : transfer.currentBuff
                 <p class="text-xs text-ink-faint">Jednorazowy monitoring</p>
               </div>
               <div class="text-right">
-                <span class="font-ticket text-lg font-bold text-ink-secondary">5 zł</span>
+                <span class="font-ticket text-lg font-bold text-ink-secondary">{PRICES.ONE_TIME}</span>
               </div>
             </div>
             <button onclick="checkout('payment')" class="w-full py-2.5 bg-surface-raised hover:bg-surface-sunken text-ink-secondary font-semibold rounded-xl transition-colors text-sm border border-border-strong">
-              Kup jednorazowo — 5 zł
+              Kup jednorazowo — {PRICES.ONE_TIME}
             </button>
           </div>
 
@@ -285,10 +286,10 @@ const bufferColor = transfer.currentBuffer > 20 ? 'green' : transfer.currentBuff
     </p>
     <div class="flex flex-col sm:flex-row gap-3 justify-center">
       <a href="/premium" class="px-8 py-3 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-xl transition-colors text-sm shadow-md shadow-brand-500/20">
-        Plan miesięczny — 15 zł/msc
+        Plan miesięczny — {PRICES.MONTHLY_PER}
       </a>
       <button onclick="checkout('payment')" class="px-6 py-3 bg-surface-raised hover:bg-surface-sunken text-ink-secondary font-medium rounded-xl transition-colors text-sm border border-border-strong">
-        Tylko ta przesiadka — 5 zł
+        Tylko ta przesiadka — {PRICES.ONE_TIME}
       </button>
     </div>
     <p class="text-xs text-ink-faint mt-3">3 przesiadki w miesiącu? Plan miesięczny już się opłaca.</p>

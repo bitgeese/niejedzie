@@ -3,6 +3,7 @@ export const prerender = false;
 import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
 import { getStripe } from '../../../lib/stripe';
+import { PRICES } from '../../../lib/constants';
 
 export const POST: APIRoute = async ({ request }) => {
   try {
@@ -50,7 +51,7 @@ export const POST: APIRoute = async ({ request }) => {
               ? `${trainA} → ${transferStation} → ${trainB}`
               : 'Jednorazowy monitoring przesiadki',
           },
-          unit_amount: 500, // 5.00 PLN in grosze
+          unit_amount: PRICES.ONE_TIME_PLN * 100, // PLN in grosze
         },
         quantity: 1,
       }];

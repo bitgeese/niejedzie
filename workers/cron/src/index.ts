@@ -18,6 +18,7 @@ interface Env {
 	DELAYS_KV: KVNamespace;
 	PKP_API_KEY: string;
 	DATA_SOURCE?: string; // 'api' | 'scraper' | 'auto'
+	ANTHROPIC_API_KEY?: string;
 }
 
 /** Shape of a single station entry returned by /operations */
@@ -145,6 +146,118 @@ function todayDateStr(): string {
 
 function yesterdayDateStr(): string {
 	return new Date(Date.now() - 86_400_000).toISOString().split("T")[0];
+}
+
+// ---------------------------------------------------------------------------
+// Enhanced Multi-Source Data Fusion
+// ---------------------------------------------------------------------------
+
+interface ScraperData {
+	totalTrains: number;
+	onTimeCount: number;
+	cancelledCount: number;
+	avgDelay: number;
+}
+
+interface DataFusionResult {
+	bestPunctuality: number;
+	bestTotalTrains: number;
+	correctedPunctuality: number | null;
+	confidence: 'high' | 'medium' | 'low';
+	primarySource: 'portal' | 'gtfs-rt' | 'scraper';
+	validationIssues: string[];
+}
+
+/**
+ * Enhanced data fusion with cross-validation and confidence scoring
+ */
+function computeEnhancedDataFusion({
+	scraperData,
+	gtfsRtStats,
+	portalStats
+}: {
+	scraperData: ScraperData;
+	gtfsRtStats: GtfsRtStats | null;
+	portalStats: PortalStats | null;
+}): DataFusionResult {
+	const validationIssues: string[] = [];
+	let bestPunctuality = scraperData.totalTrains > 0
+		? Math.round((scraperData.onTimeCount / scraperData.totalTrains) * 100)
+		: 0;
+	let bestTotalTrains = scraperData.totalTrains;
+	let correctedPunctuality: number | null = null;
+	let confidence: 'high' | 'medium' | 'low' = 'low';
+	let primarySource: 'portal' | 'gtfs-rt' | 'scraper' = 'scraper';
+
+	// 1. Portal Pasażera real punctuality (most accurate for punctuality %)
+	if (portalStats?.onRoute !== null && portalStats.onRoute !== undefined) {
+		bestPunctuality = Math.round(portalStats.onRoute * 10) / 10;
+		confidence = 'high';
+		primarySource = 'portal';
+		console.log(`[fusion] Using Portal Pasażera punctuality: ${bestPunctuality}%`);
+	}
+
+	// 2. GTFS-RT total train count (most accurate for universe size)
+	if (gtfsRtStats && gtfsRtStats.totalTrains > 0) {
+		bestTotalTrains = gtfsRtStats.totalTrains;
+
+		// Cross-validate train counts
+		const scraperRatio = scraperData.totalTrains / gtfsRtStats.totalTrains;
+		if (scraperRatio > 0.5) {
+			validationIssues.push(`High scraper ratio: ${(scraperRatio * 100).toFixed(1)}% of trains are delayed`);
+		}
+
+		// Compute GTFS-RT corrected punctuality if portal data unavailable
+		if (primarySource !== 'portal') {
+			const delayedTrains = scraperData.totalTrains - scraperData.onTimeCount - scraperData.cancelledCount;
+			const correctedOnTime = gtfsRtStats.totalTrains - delayedTrains - scraperData.cancelledCount;
+			correctedPunctuality = Math.round((correctedOnTime / gtfsRtStats.totalTrains) * 1000) / 10;
+
+			bestPunctuality = correctedPunctuality;
+			confidence = confidence === 'high' ? 'high' : 'medium';
+			primarySource = 'gtfs-rt';
+
+			console.log(`[fusion] GTFS-RT corrected punctuality: ${correctedPunctuality}% (${correctedOnTime}/${gtfsRtStats.totalTrains})`);
+		}
+	}
+
+	// 3. Data validation and quality checks
+	if (portalStats && gtfsRtStats) {
+		// Cross-validate punctuality between sources
+		const portalPunctuality = portalStats.onRoute || 0;
+		const gtfsEstimate = correctedPunctuality || 0;
+		const punctualityDiff = Math.abs(portalPunctuality - gtfsEstimate);
+
+		if (punctualityDiff > 20) {
+			validationIssues.push(`Large punctuality difference: Portal=${portalPunctuality}%, GTFS-RT=${gtfsEstimate}%`);
+			confidence = 'low';
+		}
+	}
+
+	// 4. Confidence scoring based on data availability
+	if (portalStats && gtfsRtStats && validationIssues.length === 0) {
+		confidence = 'high';
+	} else if ((portalStats || gtfsRtStats) && validationIssues.length <= 1) {
+		confidence = 'medium';
+	} else {
+		confidence = 'low';
+	}
+
+	// 5. Final validation
+	if (bestTotalTrains < scraperData.totalTrains) {
+		validationIssues.push(`Total trains (${bestTotalTrains}) less than delayed trains (${scraperData.totalTrains})`);
+		bestTotalTrains = scraperData.totalTrains;
+		confidence = 'low';
+	}
+
+	return {
+		bestPunctuality,
+		bestTotalTrains,
+		correctedPunctuality,
+		confidence,
+		primarySource,
+		validationIssues
+	};
 }
 
 /** Typed fetch wrapper for PKP PLK API with error handling */
@@ -332,30 +445,28 @@ async function pollOperations(env: Env): Promise<void> {
 	const gtfsRtStats = await gtfsRtPromise;
 	const portalStats = await portalStatsPromise;
 
-	// Corrected punctuality: uses GTFS-RT total as denominator.
-	// The scraper/API only returns DELAYED trains, so totalTrains from scraper
-	// is really "delayed train count". GTFS-RT gives us ALL running trains.
-	// Formula: (gtfsTotal - delayedTrains - cancelledTrains) / gtfsTotal * 100
-	//
-	// "delayedTrains" = trains with max delay > 5 min (from scraper data)
-	// We know: onTimeCount + cancelledCount + delayedAbove5 = totalTrains (from scraper)
-	// So delayedAbove5 = totalTrains - onTimeCount - cancelledCount
-	let correctedPunctualityPct: number | null = null;
+	// Enhanced data fusion with validation and confidence scoring
+	const fusionResult = computeEnhancedDataFusion({
+		scraperData: {
+			totalTrains,
+			onTimeCount,
+			cancelledCount,
+			avgDelay
+		},
+		gtfsRtStats,
+		portalStats
+	});
 
-	if (gtfsRtStats && gtfsRtStats.totalTrains > 0) {
-		const delayedTrains = totalTrains - onTimeCount - cancelledCount;
-		const correctedOnTime = gtfsRtStats.totalTrains - delayedTrains - cancelledCount;
-		correctedPunctualityPct =
-			Math.round((correctedOnTime / gtfsRtStats.totalTrains) * 1000) / 10;
+	// Log fusion results and validation issues
+	console.log(
+		`[pollOperations] Data Fusion — Primary: ${fusionResult.primarySource}, ` +
+		`Confidence: ${fusionResult.confidence}, ` +
+		`Trains: ${fusionResult.bestTotalTrains}, ` +
+		`Punctuality: ${fusionResult.bestPunctuality}%`
+	);
 
-		console.log(
-			`[pollOperations] GTFS-RT — ${gtfsRtStats.totalTrains} total trains running. ` +
-			`Corrected punctuality: ${correctedPunctualityPct}% ` +
-			`(${correctedOnTime} on-time of ${gtfsRtStats.totalTrains}, ` +
-			`${delayedTrains} delayed >5min, ${cancelledCount} cancelled)`,
-		);
-	} else {
-		console.log('[pollOperations] GTFS-RT unavailable — using scraper-only punctuality');
+	if (fusionResult.validationIssues.length > 0) {
+		console.warn(`[pollOperations] Data validation issues: ${fusionResult.validationIssues.join('; ')}`);
 	}
 
 	// Build topDelayed from scraped trains (sorted by max delay descending, top 10)
@@ -401,19 +512,23 @@ async function pollOperations(env: Env): Promise<void> {
 	// Write the full response shape that /api/delays/today expects
 	const todayStats = {
 		timestamp: new Date().toISOString(),
-		totalTrains,
+		totalTrains: fusionResult.bestTotalTrains,
 		avgDelay,
-		punctualityPct,
+		punctualityPct: fusionResult.bestPunctuality,
 		cancelledCount,
 		onTimeCount,
 		gtfsRtTotalTrains: gtfsRtStats?.totalTrains ?? null,
 		gtfsRtByAgency: gtfsRtStats?.byAgency ?? null,
-		correctedPunctualityPct,
+		correctedPunctualityPct: fusionResult.correctedPunctuality,
 		// Portal Pasażera REAL punctuality stats (from s=1 page)
 		portalPunctualityOnRoute: portalStats?.onRoute ?? null,
 		portalPunctualityDeparted: portalStats?.departed ?? null,
 		portalPunctualityCompleted: portalStats?.completed ?? null,
 		portalTrainsStartedPct: portalStats?.startedPct ?? null,
+		// Enhanced fusion metadata
+		dataFusionConfidence: fusionResult.confidence,
+		dataFusionPrimarySource: fusionResult.primarySource,
+		dataValidationIssues: fusionResult.validationIssues,
 		topDelayed,
 		disruptions,
 		hourlyDelays: [] as Array<{ hour: string; avgDelay: number }>,
@@ -424,10 +539,9 @@ async function pollOperations(env: Env): Promise<void> {
 	});
 
 	console.log(
-		`[pollOperations] Stats — trains: ${totalTrains}, onTime: ${onTimeCount}, ` +
+		`[pollOperations] Final Stats — trains: ${fusionResult.bestTotalTrains}, onTime: ${onTimeCount}, ` +
 			`avgDelay: ${avgDelay}min, cancelled: ${cancelledCount}, ` +
-			`punctuality: ${punctualityPct}%` +
-			(correctedPunctualityPct !== null ? ` (corrected: ${correctedPunctualityPct}%)` : ''),
+			`punctuality: ${fusionResult.bestPunctuality}% (${fusionResult.primarySource}, ${fusionResult.confidence} confidence)`
 	);
 
 	// 6. Batch INSERT OR REPLACE into delay_snapshots
@@ -471,6 +585,14 @@ async function pollOperations(env: Env): Promise<void> {
 
 	// 8. Check active monitoring sessions
 	await checkMonitoringSessions(env, allTrains);
+
+	// 9. Run data quality check every 10 minutes (5 polls)
+	const currentMinute = new Date().getMinutes();
+	if (currentMinute % 10 === 0) {
+		await reportDataQualityIssues(env).catch((err) => {
+			console.error(`[pollOperations] Data quality check failed: ${err}`);
+		});
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -824,6 +946,256 @@ async function aggregateDaily(env: Env): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// backfillCityDaily — populate historical city_daily data from delay_snapshots
+// ---------------------------------------------------------------------------
+
+async function backfillCityDaily(env: Env): Promise<void> {
+	console.log('[backfillCityDaily] Starting historical data backfill');
+
+	// Get all unique dates from delay_snapshots that don't have city_daily entries
+	const missingDates = await env.DB.prepare(`
+		SELECT DISTINCT ds.operating_date
+		FROM delay_snapshots ds
+		LEFT JOIN city_daily cd ON cd.date = ds.operating_date AND cd.city = ?
+		WHERE cd.date IS NULL
+		ORDER BY ds.operating_date DESC
+		LIMIT 30
+	`).bind(MAJOR_CITIES[0]).all();
+
+	if (!missingDates.results || missingDates.results.length === 0) {
+		console.log('[backfillCityDaily] No missing dates found');
+		return;
+	}
+
+	console.log(`[backfillCityDaily] Found ${missingDates.results.length} missing dates`);
+
+	// Process each missing date
+	for (const dateRow of missingDates.results) {
+		const date = dateRow.operating_date as string;
+		console.log(`[backfillCityDaily] Processing ${date}`);
+
+		// Process each major city for this date
+		for (const city of MAJOR_CITIES) {
+			const cityStats = await env.DB.prepare(`
+				SELECT
+					COUNT(DISTINCT schedule_id || '-' || order_id) AS train_count,
+					AVG(COALESCE(arrival_delay, departure_delay, 0)) AS avg_delay
+				FROM delay_snapshots ds
+				LEFT JOIN stations s ON s.station_id = ds.station_id
+				WHERE ds.operating_date = ?
+					AND (s.city = ? OR ds.station_name LIKE ?)
+			`).bind(date, city, `${city}%`).first();
+
+			if (!cityStats || (cityStats.train_count as number) === 0) {
+				continue;
+			}
+
+			// Count on-time trains for this city/date
+			const onTimeStats = await env.DB.prepare(`
+				SELECT COUNT(*) AS on_time FROM (
+					SELECT schedule_id, order_id,
+						   MAX(COALESCE(arrival_delay, departure_delay, 0)) AS max_delay
+					FROM delay_snapshots ds
+					LEFT JOIN stations s ON s.station_id = ds.station_id
+					WHERE ds.operating_date = ?
+						AND (s.city = ? OR ds.station_name LIKE ?)
+					GROUP BY schedule_id, order_id
+					HAVING max_delay <= 5
+				)
+			`).bind(date, city, `${city}%`).first();
+
+			const trainCount = cityStats.train_count as number;
+			const onTime = (onTimeStats?.on_time as number) || 0;
+			const avgDelay = Math.round(((cityStats.avg_delay as number) || 0) * 10) / 10;
+			const punctuality = trainCount > 0 ? Math.round((onTime / trainCount) * 1000) / 10 : 0;
+
+			// Insert into city_daily
+			await env.DB.prepare(`
+				INSERT OR REPLACE INTO city_daily (city, date, train_count, avg_delay, punctuality_pct)
+				VALUES (?, ?, ?, ?, ?)
+			`).bind(city, date, trainCount, avgDelay, punctuality).run();
+
+			console.log(`[backfillCityDaily] ${city} ${date}: ${trainCount} trains, ${punctuality}% punctual`);
+		}
+	}
+
+	console.log('[backfillCityDaily] Backfill completed');
+}
+
+// ---------------------------------------------------------------------------
+// dataQualityCheck — monitor data quality and alert on issues
+// ---------------------------------------------------------------------------
+
+interface DataQualityIssue {
+	type: string;
+	severity: 'warning' | 'error' | 'critical';
+	message: string;
+	count?: number;
+	timestamp: string;
+}
+
+async function dataQualityCheck(env: Env): Promise<DataQualityIssue[]> {
+	const issues: DataQualityIssue[] = [];
+	const now = new Date().toISOString();
+	const today = todayDateStr();
+
+	// 1. Check for "Nieznana" (Unknown) stations
+	const unknownStations = await env.DB.prepare(`
+		SELECT COUNT(*) as count
+		FROM delay_snapshots
+		WHERE operating_date = ? AND station_name = 'Nieznana'
+	`).bind(today).first();
+
+	const unknownCount = (unknownStations?.count as number) || 0;
+	if (unknownCount > 0) {
+		issues.push({
+			type: 'unknown_stations',
+			severity: unknownCount > 50 ? 'error' : 'warning',
+			message: `Found ${unknownCount} delay snapshots with "Nieznana" station names`,
+			count: unknownCount,
+			timestamp: now,
+		});
+	}
+
+	// 2. Check data freshness - latest poll should be within last 5 minutes
+	const latestSnapshot = await env.DB.prepare(`
+		SELECT recorded_at
+		FROM delay_snapshots
+		ORDER BY recorded_at DESC
+		LIMIT 1
+	`).first();
+
+	if (latestSnapshot) {
+		const latestTime = new Date(latestSnapshot.recorded_at as string);
+		const ageMinutes = (Date.now() - latestTime.getTime()) / (1000 * 60);
+
+		if (ageMinutes > 10) {
+			issues.push({
+				type: 'stale_data',
+				severity: ageMinutes > 30 ? 'critical' : 'error',
+				message: `Latest data is ${Math.round(ageMinutes)} minutes old (last: ${latestSnapshot.recorded_at})`,
+				timestamp: now,
+			});
+		}
+	} else {
+		issues.push({
+			type: 'no_data',
+			severity: 'critical',
+			message: 'No delay snapshots found in database',
+			timestamp: now,
+		});
+	}
+
+	// 3. Check for reasonable data volumes - expect at least 10 trains per poll
+	const recentSnapshots = await env.DB.prepare(`
+		SELECT COUNT(*) as count
+		FROM delay_snapshots
+		WHERE operating_date = ? AND recorded_at > datetime('now', '-10 minutes')
+	`).bind(today).first();
+
+	const recentCount = (recentSnapshots?.count as number) || 0;
+	if (recentCount < 5) {
+		issues.push({
+			type: 'low_data_volume',
+			severity: recentCount === 0 ? 'critical' : 'warning',
+			message: `Only ${recentCount} snapshots in last 10 minutes (expected >10)`,
+			count: recentCount,
+			timestamp: now,
+		});
+	}
+
+	// 4. Check KV cache health
+	try {
+		const kvStats = await env.DELAYS_KV.get('stats:today');
+		if (!kvStats) {
+			issues.push({
+				type: 'kv_cache_empty',
+				severity: 'warning',
+				message: 'KV cache for stats:today is empty',
+				timestamp: now,
+			});
+		} else {
+			const stats = JSON.parse(kvStats);
+			const statsAge = new Date(stats.timestamp);
+			const statsAgeMinutes = (Date.now() - statsAge.getTime()) / (1000 * 60);
+
+			if (statsAgeMinutes > 10) {
+				issues.push({
+					type: 'kv_cache_stale',
+					severity: 'warning',
+					message: `KV cache stats are ${Math.round(statsAgeMinutes)} minutes old`,
+					timestamp: now,
+				});
+			}
+		}
+	} catch (err) {
+		issues.push({
+			type: 'kv_cache_error',
+			severity: 'error',
+			message: `Failed to check KV cache: ${err}`,
+			timestamp: now,
+		});
+	}
+
+	// 5. Check for completeness - trains should have metadata
+	const trainsWithoutMetadata = await env.DB.prepare(`
+		SELECT COUNT(DISTINCT ds.schedule_id || '-' || ds.order_id) as count
+		FROM delay_snapshots ds
+		LEFT JOIN trains t ON t.schedule_id = ds.schedule_id AND t.order_id = ds.order_id
+		WHERE ds.operating_date = ? AND t.schedule_id IS NULL
+	`).bind(today).first();
+
+	const missingMetadataCount = (trainsWithoutMetadata?.count as number) || 0;
+	if (missingMetadataCount > 0) {
+		issues.push({
+			type: 'missing_train_metadata',
+			severity: 'warning',
+			message: `${missingMetadataCount} trains missing metadata in trains table`,
+			count: missingMetadataCount,
+			timestamp: now,
+		});
+	}
+
+	return issues;
+}
+
+async function reportDataQualityIssues(env: Env): Promise<void> {
+	console.log('[dataQualityCheck] Starting data quality assessment');
+
+	const issues = await dataQualityCheck(env);
+
+	if (issues.length === 0) {
+		console.log('[dataQualityCheck] ✅ No data quality issues found');
+		return;
+	}
+
+	// Log all issues
+	console.log(`[dataQualityCheck] ⚠️ Found ${issues.length} data quality issues:`);
+	for (const issue of issues) {
+		const severity = issue.severity.toUpperCase();
+		console.log(`[dataQualityCheck] ${severity}: ${issue.type} - ${issue.message}`);
+	}
+
+	// Store issues in KV for monitoring dashboard
+	await env.DELAYS_KV.put(
+		'quality:issues',
+		JSON.stringify({
+			timestamp: new Date().toISOString(),
+			issueCount: issues.length,
+			issues,
+		}),
+		{ expirationTtl: 3600 }, // 1 hour
+	);
+
+	// For critical issues, we could add webhook notifications here
+	const criticalIssues = issues.filter(i => i.severity === 'critical');
+	if (criticalIssues.length > 0) {
+		console.error(`[dataQualityCheck] 🚨 ${criticalIssues.length} CRITICAL issues requiring immediate attention`);
+		// TODO: Add Slack/email webhook notification here
+	}
+}
+
+// ---------------------------------------------------------------------------
 // checkMonitoringSessions — runs after each pollOperations
 // ---------------------------------------------------------------------------
 
@@ -1048,6 +1420,9 @@ export default {
 						await aggregateDaily(env).catch((err) =>
 							console.error(`[aggregateDaily] Fatal: ${err}`),
 						);
+						await backfillCityDaily(env).catch((err) =>
+							console.error(`[backfillCityDaily] Fatal: ${err}`),
+						);
 						await loadStations(env).catch((err) =>
 							console.error(`[loadStations] Fatal: ${err}`),
 						);
@@ -1086,6 +1461,16 @@ export default {
 		if (url.pathname === "/__trigger/aggregate") {
 			ctx.waitUntil(aggregateDaily(env));
 			return Response.json({ triggered: "aggregateDaily" });
+		}
+
+		if (url.pathname === "/__trigger/backfill-city") {
+			ctx.waitUntil(backfillCityDaily(env));
+			return Response.json({ triggered: "backfillCityDaily" });
+		}
+
+		if (url.pathname === "/__trigger/data-quality") {
+			ctx.waitUntil(reportDataQualityIssues(env));
+			return Response.json({ triggered: "dataQualityCheck" });
 		}
 
 		if (url.pathname === "/__trigger/scraper") {

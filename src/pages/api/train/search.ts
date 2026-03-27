@@ -112,22 +112,53 @@ export const GET: APIRoute = async ({ url }) => {
     ].join('-');
 
     // ── Query delay_snapshots for today ──────────────────────────────
-    const snapshotRows = await env.DB.prepare(`
-      SELECT station_name, planned_arrival, planned_departure, actual_arrival, actual_departure,
-             arrival_delay, departure_delay, sequence_num, is_confirmed, is_cancelled, recorded_at
-      FROM delay_snapshots
-      WHERE schedule_id = ? AND order_id = ? AND operating_date = ?
-      ORDER BY sequence_num ASC, recorded_at DESC
-    `).bind(scheduleId, orderId, operatingDate).all();
+    // Try ALL matching schedule_ids (scraper may generate different hashes on different days)
+    // D1 bind() doesn't support spreading arrays into IN(), so we run multiple queries
+    let snapshotRows: { results: any[] } = { results: [] };
+
+    for (const row of trainRows.results) {
+      const sid = row.schedule_id as number;
+      const oid = row.order_id as number;
+      const result = await env.DB.prepare(`
+        SELECT station_name, planned_arrival, planned_departure, actual_arrival, actual_departure,
+               arrival_delay, departure_delay, sequence_num, is_confirmed, is_cancelled, recorded_at
+        FROM delay_snapshots
+        WHERE schedule_id = ? AND order_id = ? AND operating_date = ?
+        ORDER BY sequence_num ASC, recorded_at DESC
+      `).bind(sid, oid, operatingDate).all();
+
+      if (result.results?.length > snapshotRows.results.length) {
+        snapshotRows = result; // Use the schedule_id with the most data
+      }
+    }
 
     if (!snapshotRows.results?.length) {
-      // Train exists in metadata but no snapshots for today
+      // Also try without date filter as fallback (show any recent data)
+      for (const row of trainRows.results) {
+        const sid = row.schedule_id as number;
+        const oid = row.order_id as number;
+        const fallback = await env.DB.prepare(`
+          SELECT station_name, planned_arrival, planned_departure, actual_arrival, actual_departure,
+                 arrival_delay, departure_delay, sequence_num, is_confirmed, is_cancelled, recorded_at
+          FROM delay_snapshots
+          WHERE schedule_id = ? AND order_id = ?
+          ORDER BY sequence_num ASC, recorded_at DESC
+          LIMIT 100
+        `).bind(sid, oid).all();
+
+        if (fallback.results?.length > snapshotRows.results.length) {
+          snapshotRows = fallback;
+        }
+      }
+    }
+
+    if (!snapshotRows.results?.length) {
       return new Response(
         JSON.stringify({
           train,
           stations: [],
           suggestions,
-          error: 'Brak danych o przejazdach na dzisiaj',
+          error: 'Brak danych o przejazdach',
         } satisfies SearchResponse),
         { headers },
       );
@@ -175,7 +206,13 @@ export const GET: APIRoute = async ({ url }) => {
       stations[lastPassedIdx].current = true;
     }
 
-    const response: SearchResponse = { train, stations, suggestions };
+    const response: SearchResponse & { _debug?: any } = { train, stations, suggestions };
+    response._debug = {
+      matchCount: trainRows.results.length,
+      scheduleIds: trainRows.results.map(r => r.schedule_id),
+      operatingDate,
+      rawSnapshotCount: snapshotRows.results.length,
+    };
     return new Response(JSON.stringify(response), { headers });
   } catch (err) {
     console.error('[api/train/search] Error:', err);

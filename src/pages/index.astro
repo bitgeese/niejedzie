@@ -1,5 +1,6 @@
 ---
 import Base from '../layouts/Base.astro';
+import { PRICES } from '../lib/constants';
 import { fetchTodayDelays } from '../lib/fetch-data';
 
 const todayData = await fetchTodayDelays();
@@ -92,7 +93,7 @@ const exampleTrain = liveTopTrain ? {
         <div class="step-number mb-5">02</div>
         <h3 class="text-[1.0625rem] font-bold text-ink mb-2.5 tracking-tight">Włącz monitoring</h3>
         <p class="text-ink-muted text-[0.9375rem] leading-relaxed">
-          Za <span class="font-ticket font-semibold text-brand-500">15&nbsp;zł/msc</span> monitorujemy wszystkie Twoje przesiadki. Jeśli opóźnienie zagrozi połączeniu — dostaniesz powiadomienie push.
+          Za <span class="font-ticket font-semibold text-brand-500">{PRICES.MONTHLY_PER}</span> monitorujemy wszystkie Twoje przesiadki. Jeśli opóźnienie zagrozi połączeniu — dostaniesz powiadomienie push.
         </p>
       </div>
       <div class="fade-up">
@@ -253,14 +254,14 @@ const exampleTrain = liveTopTrain ? {
         <!-- CTA — push monthly -->
         <div class="p-5 bg-brand-50 border-t border-brand-200">
           <button onclick="checkout('subscription')" class="btn-primary w-full text-center block">
-            Monitoruj bez limitu — 15 zł/msc
+            Monitoruj bez limitu — {PRICES.MONTHLY_PER}
           </button>
           <p class="text-center text-[0.75rem] text-ink-muted mt-2.5">
             Nielimitowane przesiadki &middot; Priorytetowe alerty &middot; Historia tras
           </p>
           <p class="text-center mt-2">
             <a href="/cennik" class="text-[0.75rem] text-ink-faint hover:text-ink transition-colors underline underline-offset-2">
-              Tylko ta przesiadka? 5 zł jednorazowo
+              Tylko ta przesiadka? {PRICES.ONE_TIME} jednorazowo
             </a>
           </p>
         </div>
@@ -272,7 +273,7 @@ const exampleTrain = liveTopTrain ? {
   <section class="max-w-5xl mx-auto px-5 py-24 fade-up">
     <p class="section-label text-center mb-4">// cennik</p>
     <h2 class="text-[1.75rem] md:text-[2rem] font-extrabold text-ink text-center mb-3 tracking-tight">Spokój za cenę kawy</h2>
-    <p class="text-ink-muted text-center mb-14 max-w-md mx-auto">Pełen monitoring przesiadek za 15&nbsp;zł/msc. Albo jednorazowo, jeśli jedziesz raz.</p>
+    <p class="text-ink-muted text-center mb-14 max-w-md mx-auto">Pełen monitoring przesiadek za {PRICES.MONTHLY_PER}. Albo jednorazowo, jeśli jedziesz raz.</p>
 
     <div class="grid md:grid-cols-2 gap-5 max-w-2xl mx-auto">
       <!-- Monthly — dominant, first on mobile -->
@@ -283,7 +284,7 @@ const exampleTrain = liveTopTrain ? {
         <div class="mb-5">
           <p class="section-label text-brand-500 mb-3">Miesięczny</p>
           <div class="flex items-baseline gap-1">
-            <span class="font-ticket text-[2.5rem] font-bold text-ink tracking-tight">15 zł</span>
+            <span class="font-ticket text-[2.5rem] font-bold text-ink tracking-tight">{PRICES.MONTHLY}</span>
             <span class="text-ink-faint text-sm">/ miesiąc</span>
           </div>
           <p class="text-[0.8125rem] text-brand-600 font-medium mt-1">3 przesiadki = subskrypcja się zwraca</p>
@@ -314,7 +315,7 @@ const exampleTrain = liveTopTrain ? {
             Pomoc w składaniu reklamacji
           </li>
         </ul>
-        <a href="/premium" class="btn-primary w-full text-center">Zacznij za 15 zł/msc</a>
+        <a href="/premium" class="btn-primary w-full text-center">Zacznij za {PRICES.MONTHLY_PER}</a>
         <p class="text-center text-[0.6875rem] text-ink-faint mt-3">Anulujesz kiedy chcesz. Bez zobowiązań.</p>
       </div>
 
@@ -323,7 +324,7 @@ const exampleTrain = liveTopTrain ? {
         <div class="mb-5">
           <p class="section-label text-ink-faint mb-3">Jednorazowy</p>
           <div class="flex items-baseline gap-1">
-            <span class="font-ticket text-[2rem] font-bold text-ink tracking-tight">5 zł</span>
+            <span class="font-ticket text-[2rem] font-bold text-ink tracking-tight">{PRICES.ONE_TIME}</span>
             <span class="text-ink-faint text-sm">/ przesiadka</span>
           </div>
           <p class="text-[0.75rem] text-ink-faint mt-1">Jedziesz raz? To opcja dla Ciebie.</p>
@@ -354,7 +355,7 @@ const exampleTrain = liveTopTrain ? {
             <span class="text-ink-faint">Brak priorytetowych powiadomień</span>
           </li>
         </ul>
-        <a href="/cennik" class="btn-secondary w-full text-center">Kup jednorazowo &mdash; 5 zł</a>
+        <a href="/cennik" class="btn-secondary w-full text-center">Kup jednorazowo &mdash; {PRICES.ONE_TIME}</a>
       </div>
     </div>
 
@@ -435,7 +436,7 @@ const exampleTrain = liveTopTrain ? {
     </p>
     <div class="flex flex-col sm:flex-row gap-3 justify-center">
       <a href="/premium" class="btn-primary">
-        Plan miesięczny &mdash; 15 zł/msc
+        Plan miesięczny &mdash; {PRICES.MONTHLY_PER}
       </a>
       <a href="#top" class="btn-secondary">
         Sprawdź przesiadkę za darmo

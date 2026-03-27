@@ -4,6 +4,8 @@
 // Scrapes the public delays page at portalpasazera.pl/Opoznienia to extract
 // currently delayed trains and transforms them into the ApiTrain format used
 // by the rest of the pipeline.
+//
+// Enhanced with Claude AI for intelligent station name cleaning and validation.
 
 // ---------------------------------------------------------------------------
 // Types
@@ -58,6 +60,7 @@ interface Env {
 	DELAYS_KV: KVNamespace;
 	PKP_API_KEY: string;
 	DATA_SOURCE?: string;
+	ANTHROPIC_API_KEY?: string;
 }
 
 /** Real-time punctuality stats from Portal Pasażera s=1 page */
@@ -81,6 +84,185 @@ const PAGE_FETCH_DELAY_MS = 500;
 const DETAIL_FETCH_DELAY_MS = 500;
 const MAX_DETAIL_PAGES_PER_CYCLE = 10;
 const USER_AGENT = 'niejedzie.pl/1.0 (train delay tracker; contact@niejedzie.pl)';
+
+// ---------------------------------------------------------------------------
+// Claude AI Station Name Cleaning
+// ---------------------------------------------------------------------------
+
+interface CleanStationResult {
+	cleanName: string;
+	confidence: 'high' | 'medium' | 'low';
+	originalName: string;
+}
+
+/**
+ * Clean and standardize Polish station names using Claude AI
+ */
+async function cleanStationName(rawName: string, env: Env): Promise<CleanStationResult> {
+	// Skip if no API key available
+	if (!env.ANTHROPIC_API_KEY || !rawName || rawName.trim() === '') {
+		return {
+			cleanName: rawName || 'Nieznana',
+			confidence: 'low',
+			originalName: rawName || ''
+		};
+	}
+
+	// Cache cleaned names to avoid redundant API calls
+	const cacheKey = `station:clean:${rawName}`;
+	try {
+		const cached = await env.DELAYS_KV.get(cacheKey);
+		if (cached) {
+			const result = JSON.parse(cached) as CleanStationResult;
+			return result;
+		}
+	} catch (err) {
+		console.warn(`[scraper] Station cache read failed: ${err}`);
+	}
+
+	try {
+		const prompt = `Clean and standardize this Polish railway station name: "${rawName}"
+
+Rules:
+1. Fix encoding issues (ą, ć, ę, ł, ń, ó, ś, ź, ż)
+2. Use official PKP station naming format
+3. Remove HTML artifacts or extra whitespace
+4. Keep original if already correct
+5. If unclear/ambiguous, return original name (don't guess)
+
+Return ONLY the cleaned station name, no explanation.`;
+
+		const response = await fetch('https://api.anthropic.com/v1/messages', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'X-API-Key': env.ANTHROPIC_API_KEY,
+				'anthropic-version': '2023-06-01',
+			},
+			body: JSON.stringify({
+				model: 'claude-3-haiku-20240307',
+				max_tokens: 50,
+				messages: [{
+					role: 'user',
+					content: prompt
+				}]
+			}),
+		});
+
+		if (!response.ok) {
+			throw new Error(`Claude API error: ${response.status}`);
+		}
+
+		const data = await response.json() as { content: { text: string }[] };
+		const cleanName = data.content[0]?.text?.trim() || rawName;
+
+		const result: CleanStationResult = {
+			cleanName,
+			confidence: cleanName === rawName ? 'high' : 'medium',
+			originalName: rawName
+		};
+
+		// Cache for 24 hours
+		await env.DELAYS_KV.put(cacheKey, JSON.stringify(result), {
+			expirationTtl: 86400
+		});
+
+		console.log(`[scraper] Cleaned station: "${rawName}" → "${cleanName}"`);
+		return result;
+
+	} catch (err) {
+		console.error(`[scraper] Station cleaning failed for "${rawName}": ${err}`);
+		return {
+			cleanName: rawName,
+			confidence: 'low',
+			originalName: rawName
+		};
+	}
+}
+
+/**
+ * Batch clean multiple station names efficiently
+ */
+async function batchCleanStationNames(
+	stationNames: string[],
+	env: Env
+): Promise<Map<string, CleanStationResult>> {
+	const results = new Map<string, CleanStationResult>();
+	const uniqueNames = [...new Set(stationNames.filter(name => name && name.trim()))];
+
+	if (uniqueNames.length === 0) return results;
+
+	console.log(`[scraper] Batch cleaning ${uniqueNames.length} unique station names`);
+
+	// Process in batches to avoid overwhelming the API
+	const BATCH_SIZE = 5;
+	for (let i = 0; i < uniqueNames.length; i += BATCH_SIZE) {
+		const batch = uniqueNames.slice(i, i + BATCH_SIZE);
+
+		const promises = batch.map(async (name) => {
+			const result = await cleanStationName(name, env);
+			results.set(name, result);
+			return result;
+		});
+
+		await Promise.all(promises);
+
+		// Rate limiting - pause between batches
+		if (i + BATCH_SIZE < uniqueNames.length) {
+			await new Promise(resolve => setTimeout(resolve, 1000));
+		}
+	}
+
+	return results;
+}
+
+/**
+ * Clean station names in the detail map using Claude AI
+ */
+async function cleanStationNamesInDetailMap(
+	detailMap: Map<string, ApiStation[]>,
+	env: Env
+): Promise<Map<string, ApiStation[]>> {
+	const cleanedDetailMap = new Map<string, ApiStation[]>();
+
+	if (detailMap.size === 0) {
+		return cleanedDetailMap;
+	}
+
+	// Collect all unique station names from detail map
+	const allStationNames: string[] = [];
+	for (const stations of detailMap.values()) {
+		for (const station of stations) {
+			allStationNames.push(station.stationName);
+		}
+	}
+
+	// Batch clean all unique station names
+	const cleaningResults = await batchCleanStationNames(allStationNames, env);
+
+	// Apply cleaning results to detail map
+	for (const [trainKey, stations] of detailMap) {
+		const cleanedStations: ApiStation[] = stations.map(station => {
+			const cleanResult = cleaningResults.get(station.stationName);
+			if (cleanResult && cleanResult.confidence !== 'low') {
+				return {
+					...station,
+					stationName: cleanResult.cleanName
+				};
+			}
+			return station;
+		});
+
+		cleanedDetailMap.set(trainKey, cleanedStations);
+	}
+
+	const totalCleaned = Array.from(cleaningResults.values())
+		.filter(result => result.cleanName !== result.originalName).length;
+
+	console.log(`[scraper] Cleaned ${totalCleaned} station names out of ${cleaningResults.size} unique names`);
+
+	return cleanedDetailMap;
+}
 
 // ---------------------------------------------------------------------------
 // Session management
@@ -175,6 +357,182 @@ async function getOrRefreshSession(kv: KVNamespace): Promise<ScrapingSession> {
 		}
 	}
 	return initSession(kv);
+}
+
+// ---------------------------------------------------------------------------
+// Enhanced Session Management with Circuit Breaker
+// ---------------------------------------------------------------------------
+
+interface SessionPool {
+	sessions: ScrapingSession[];
+	failures: number;
+	lastFailure: number;
+	circuitState: 'CLOSED' | 'OPEN' | 'HALF_OPEN';
+}
+
+const SESSION_POOL_KEY = 'scraper:session:pool';
+const MAX_POOL_SIZE = 3;
+const CIRCUIT_FAILURE_THRESHOLD = 5;
+const CIRCUIT_TIMEOUT_MS = 300000; // 5 minutes
+const BACKOFF_BASE_DELAY_MS = 1000;
+const MAX_BACKOFF_DELAY_MS = 30000;
+
+/**
+ * Enhanced session manager with circuit breaker pattern
+ */
+class RobustSessionManager {
+	private env: Env;
+	private kv: KVNamespace;
+
+	constructor(env: Env) {
+		this.env = env;
+		this.kv = env.DELAYS_KV;
+	}
+
+	async getWorkingSession(): Promise<ScrapingSession | null> {
+		const pool = await this.getSessionPool();
+
+		// Check circuit breaker state
+		if (pool.circuitState === 'OPEN') {
+			if (Date.now() - pool.lastFailure > CIRCUIT_TIMEOUT_MS) {
+				pool.circuitState = 'HALF_OPEN';
+				console.log('[scraper] Circuit breaker: transitioning to HALF_OPEN');
+			} else {
+				console.error('[scraper] Circuit breaker: OPEN - session creation blocked');
+				return null;
+			}
+		}
+
+		// Try existing sessions from pool first
+		for (const session of pool.sessions) {
+			if (this.isSessionValid(session)) {
+				console.log('[scraper] Using pooled session');
+				return session;
+			}
+		}
+
+		// Try to create new session with circuit breaker protection
+		try {
+			const newSession = await this.createSessionWithRetry();
+			if (newSession) {
+				await this.addSessionToPool(newSession, pool);
+				this.onSessionSuccess(pool);
+				return newSession;
+			}
+		} catch (err) {
+			console.error(`[scraper] Session creation failed: ${err}`);
+			this.onSessionFailure(pool, err);
+		}
+
+		return null;
+	}
+
+	private async createSessionWithRetry(): Promise<ScrapingSession | null> {
+		let attempt = 0;
+		const maxAttempts = 3;
+
+		while (attempt < maxAttempts) {
+			try {
+				const delay = Math.min(
+					BACKOFF_BASE_DELAY_MS * Math.pow(2, attempt),
+					MAX_BACKOFF_DELAY_MS
+				);
+
+				if (attempt > 0) {
+					console.log(`[scraper] Retrying session creation (attempt ${attempt + 1}/${maxAttempts}) after ${delay}ms`);
+					await this.sleep(delay);
+				}
+
+				return await initSession(this.kv);
+			} catch (err) {
+				attempt++;
+				console.warn(`[scraper] Session creation attempt ${attempt} failed: ${err}`);
+
+				if (attempt >= maxAttempts) {
+					throw err;
+				}
+			}
+		}
+
+		return null;
+	}
+
+	private async getSessionPool(): Promise<SessionPool> {
+		try {
+			const cached = await this.kv.get(SESSION_POOL_KEY);
+			if (cached) {
+				return JSON.parse(cached) as SessionPool;
+			}
+		} catch (err) {
+			console.warn(`[scraper] Failed to read session pool: ${err}`);
+		}
+
+		return {
+			sessions: [],
+			failures: 0,
+			lastFailure: 0,
+			circuitState: 'CLOSED'
+		};
+	}
+
+	private async saveSessionPool(pool: SessionPool): Promise<void> {
+		try {
+			await this.kv.put(SESSION_POOL_KEY, JSON.stringify(pool), {
+				expirationTtl: SESSION_TTL
+			});
+		} catch (err) {
+			console.warn(`[scraper] Failed to save session pool: ${err}`);
+		}
+	}
+
+	private async addSessionToPool(session: ScrapingSession, pool: SessionPool): Promise<void> {
+		// Remove expired sessions and limit pool size
+		pool.sessions = pool.sessions
+			.filter(s => this.isSessionValid(s))
+			.slice(0, MAX_POOL_SIZE - 1);
+
+		pool.sessions.unshift(session);
+		await this.saveSessionPool(pool);
+	}
+
+	private isSessionValid(session: ScrapingSession): boolean {
+		const ageMs = Date.now() - session.createdAt;
+		return ageMs < (SESSION_TTL * 1000);
+	}
+
+	private async onSessionSuccess(pool: SessionPool): Promise<void> {
+		// Reset circuit breaker on success
+		if (pool.circuitState !== 'CLOSED') {
+			pool.circuitState = 'CLOSED';
+			pool.failures = 0;
+			console.log('[scraper] Circuit breaker: reset to CLOSED after successful session');
+			await this.saveSessionPool(pool);
+		}
+	}
+
+	private async onSessionFailure(pool: SessionPool, error: any): Promise<void> {
+		pool.failures++;
+		pool.lastFailure = Date.now();
+
+		if (pool.failures >= CIRCUIT_FAILURE_THRESHOLD) {
+			pool.circuitState = 'OPEN';
+			console.error(`[scraper] Circuit breaker: OPEN after ${pool.failures} failures`);
+		}
+
+		await this.saveSessionPool(pool);
+	}
+
+	private sleep(ms: number): Promise<void> {
+		return new Promise(resolve => setTimeout(resolve, ms));
+	}
+}
+
+/**
+ * Get a working session using the robust session manager
+ */
+async function getEnhancedSession(env: Env): Promise<ScrapingSession | null> {
+	const manager = new RobustSessionManager(env);
+	return await manager.getWorkingSession();
 }
 
 // ---------------------------------------------------------------------------
@@ -383,15 +741,32 @@ async function scrapeTrainDetail(session: ScrapingSession, detailUrl: string): P
 		? detailUrl
 		: `${PORTAL_BASE}${detailUrl.startsWith('/') ? '' : '/'}${detailUrl}`;
 
-	const res = await fetch(fullUrl, {
-		headers: {
-			'User-Agent': USER_AGENT,
-			'Accept': 'text/html,application/xhtml+xml',
-			'Accept-Language': 'pl-PL,pl;q=0.9',
-			'Cookie': buildCookieHeader(session),
-		},
-		redirect: 'manual',
-	});
+	let res: Response;
+	try {
+		// Add timeout to detail page fetches
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+
+		res = await fetch(fullUrl, {
+			headers: {
+				'User-Agent': USER_AGENT,
+				'Accept': 'text/html,application/xhtml+xml',
+				'Accept-Language': 'pl-PL,pl;q=0.9',
+				'Cookie': buildCookieHeader(session),
+			},
+			redirect: 'manual',
+			signal: controller.signal,
+		});
+
+		clearTimeout(timeoutId);
+	} catch (err) {
+		if (err.name === 'AbortError') {
+			console.warn(`[scraper:detail] Request timeout for ${fullUrl}`);
+		} else {
+			console.warn(`[scraper:detail] Fetch error for ${fullUrl}: ${err}`);
+		}
+		return null;
+	}
 
 	// Detect redirects — a 302 typically means the pid is invalid
 	// (session mismatch or expired page context)
@@ -603,18 +978,47 @@ async function scrapeCurrentDelays(session: ScrapingSession): Promise<ScrapedTra
 			url.searchParams.set('p', String(page));
 		}
 
-		const res = await fetch(url.toString(), {
-			headers: {
-				'User-Agent': USER_AGENT,
-				'Accept': 'text/html,application/xhtml+xml',
-				'Accept-Language': 'pl-PL,pl;q=0.9',
-				'Cookie': buildCookieHeader(session),
-			},
-			redirect: 'follow',
-		});
+		let res: Response;
+		try {
+			// Add timeout to fetch requests
+			const controller = new AbortController();
+			const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
 
-		if (!res.ok) {
-			console.warn(`[scraper] Page ${page} fetch failed: ${res.status}`);
+			res = await fetch(url.toString(), {
+				headers: {
+					'User-Agent': USER_AGENT,
+					'Accept': 'text/html,application/xhtml+xml',
+					'Accept-Language': 'pl-PL,pl;q=0.9',
+					'Cookie': buildCookieHeader(session),
+				},
+				redirect: 'follow',
+				signal: controller.signal,
+			});
+
+			clearTimeout(timeoutId);
+
+			if (!res.ok) {
+				if (res.status === 503 || res.status === 502) {
+					console.warn(`[scraper] Page ${page} server error: ${res.status} - retrying after delay`);
+					await new Promise(resolve => setTimeout(resolve, 2000));
+					continue;
+				}
+				console.warn(`[scraper] Page ${page} fetch failed: ${res.status}`);
+				break;
+			}
+		} catch (err) {
+			if (err.name === 'AbortError') {
+				console.warn(`[scraper] Page ${page} fetch timed out`);
+			} else {
+				console.warn(`[scraper] Page ${page} fetch error: ${err}`);
+			}
+
+			// Exponential backoff for retries
+			if (page <= 3) {
+				const delay = Math.min(2000 * Math.pow(2, page - 1), 8000);
+				await new Promise(resolve => setTimeout(resolve, delay));
+				continue;
+			}
 			break;
 		}
 
@@ -624,11 +1028,19 @@ async function scrapeCurrentDelays(session: ScrapingSession): Promise<ScrapedTra
 		// matching cookies for detail page fetches to work.
 		updateSessionFromResponse(session, res);
 
-		const html = await res.text();
-		const trains = parseDelaysPage(html);
+		let html: string;
+		let trains: ScrapedTrain[];
 
-		if (trains.length === 0) {
-			console.log(`[scraper] No trains found on page ${page}, stopping`);
+		try {
+			html = await res.text();
+			trains = parseDelaysPage(html);
+
+			if (trains.length === 0) {
+				console.log(`[scraper] No trains found on page ${page}, stopping`);
+				break;
+			}
+		} catch (err) {
+			console.warn(`[scraper] Failed to parse page ${page}: ${err}`);
 			break;
 		}
 
@@ -681,14 +1093,17 @@ function hashCode(str: string): number {
  * page will have full station arrays. Trains without detail data fall back to
  * a single summary station entry from the list view.
  */
-function transformToApiFormat(
+async function transformToApiFormat(
 	scraped: ScrapedTrain[],
 	detailMap: Map<string, ApiStation[]> = new Map(),
-): ApiTrain[] {
+	env: Env,
+): Promise<ApiTrain[]> {
 	const today = new Date().toISOString().split('T')[0];
 	const now = new Date().toISOString();
 
-	return scraped.map((train): ApiTrain => {
+	const transformedTrains: ApiTrain[] = [];
+
+	for (const train of scraped) {
 		const fullTrainNumber = train.carrier
 			? `${train.carrier} ${train.trainNumber}`
 			: train.trainNumber;
@@ -707,9 +1122,17 @@ function transformToApiFormat(
 			stations = detailStations;
 		} else {
 			// Fall back to a single station entry from the list view summary
+			// Clean the station name using Claude AI before fallback
+			let stationName = train.routeTo || 'Nieznana';
+
+			if (train.routeTo && train.routeTo.trim() !== '') {
+				const cleanResult = await cleanStationName(train.routeTo, env);
+				stationName = cleanResult.cleanName;
+			}
+
 			const station: ApiStation = {
 				stationId: hashCode(train.routeTo || 'unknown'),
-				stationName: train.routeTo || 'Nieznana',
+				stationName,
 				sequenceNumber: 1,
 				plannedArrival: now,
 				plannedDeparture: null,
@@ -723,7 +1146,7 @@ function transformToApiFormat(
 			stations = [station];
 		}
 
-		return {
+		const apiTrain: ApiTrain = {
 			scheduleId,
 			orderId: 0,
 			trainNumber: fullTrainNumber,
@@ -733,7 +1156,11 @@ function transformToApiFormat(
 			routeEndStation: train.routeTo || undefined,
 			stations,
 		};
-	});
+
+		transformedTrains.push(apiTrain);
+	}
+
+	return transformedTrains;
 }
 
 // ---------------------------------------------------------------------------
@@ -820,12 +1247,12 @@ export async function fetchFromScraper(env: Env): Promise<ApiTrain[] | null> {
 	try {
 		console.log('[scraper] Starting Portal Pasażera scrape');
 
-		// Always create a fresh session for each scrape cycle.
-		// Detail page URLs contain `pid` tokens that are tied to the server-side
-		// session state at the time the list page was rendered. A stale KV-cached
-		// session from a previous cron cycle will have a different session context,
-		// causing detail page fetches to fail with redirects.
-		const session = await initSession(env.DELAYS_KV);
+		// Use enhanced session management with circuit breaker and retry logic
+		const session = await getEnhancedSession(env);
+		if (!session) {
+			console.error('[scraper] Failed to get working session - circuit breaker may be open');
+			return [];
+		}
 
 		// scrapeCurrentDelays mutates session in-place to capture any cookie
 		// rotations from the list page response — this ensures fetchTrainDetails
@@ -845,8 +1272,11 @@ export async function fetchFromScraper(env: Env): Promise<ApiTrain[] | null> {
 		// Fetch per-station detail pages for top trains
 		const detailMap = await fetchTrainDetails(session, scraped);
 
-		const trains = transformToApiFormat(scraped, detailMap);
-		console.log(`[scraper] Transformed ${trains.length} trains to API format (${detailMap.size} with station details)`);
+		// Clean station names using Claude AI
+		const cleanedDetailMap = await cleanStationNamesInDetailMap(detailMap, env);
+
+		const trains = await transformToApiFormat(scraped, cleanedDetailMap, env);
+		console.log(`[scraper] Transformed ${trains.length} trains to API format (${cleanedDetailMap.size} with station details)`);
 
 		return trains;
 	} catch (err) {

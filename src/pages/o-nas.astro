@@ -1,5 +1,6 @@
 ---
 import Base from '../layouts/Base.astro';
+import { PRICES } from '../lib/constants';
 ---
 <Base title="O nas — jak działa niejedzie.pl" description="Czym jest niejedzie.pl, skąd bierzemy dane o opóźnieniach pociągów i jak działa monitoring przesiadek PKP. Najczęściej zadawane pytania.">
 
@@ -33,7 +34,7 @@ import Base from '../layouts/Base.astro';
           </li>
           <li class="flex items-start gap-3">
             <span class="w-6 h-6 rounded-full bg-brand-100 text-brand-600 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">3</span>
-            <span>Za jednorazowe 5 zł włączasz monitoring — śledzimy Twój pociąg i wysyłamy powiadomienie push jeśli opóźnienie się zmieni</span>
+            <span>Za jednorazowe {PRICES.ONE_TIME} włączasz monitoring — śledzimy Twój pociąg i wysyłamy powiadomienie push jeśli opóźnienie się zmieni</span>
           </li>
           <li class="flex items-start gap-3">
             <span class="w-6 h-6 rounded-full bg-brand-100 text-brand-600 font-bold text-xs flex items-center justify-center shrink-0 mt-0.5">4</span>
@@ -82,7 +83,7 @@ import Base from '../layouts/Base.astro';
         <div class="bg-surface-raised rounded-xl border border-border p-5">
           <h3 class="text-sm font-semibold text-ink mb-2">Ile kosztuje monitoring przesiadki?</h3>
           <p class="text-sm text-ink-muted">
-            5 zł za jedną przesiadkę. Jednorazowa płatność, bez subskrypcji. Monitorujemy Twój pociąg do końca podróży. Sprawdzenie opóźnienia (bez monitoringu) jest darmowe.
+            {PRICES.ONE_TIME} za jedną przesiadkę. Jednorazowa płatność, bez subskrypcji. Monitorujemy Twój pociąg do końca podróży. Sprawdzenie opóźnienia (bez monitoringu) jest darmowe.
           </p>
         </div>
 

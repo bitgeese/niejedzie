@@ -1,6 +1,7 @@
 ---
 import Base from '../../layouts/Base.astro';
 import StatCard from '../../components/StatCard.astro';
+import { PRICES } from '../../lib/constants';
 import { fetchCityData, fetchDisruptions, EMPTY_CITY } from '../../lib/fetch-data';
 
 const CITY_SLUG = 'gdansk';
@@ -215,7 +216,7 @@ function punctualityBadge(p: number) {
         </p>
         <a href="/" class="btn-primary">Monitoruj przesiadkę</a>
         <p class="text-center text-[0.6875rem] text-ink-faint mt-3">
-          Jednorazowo 5 zł lub <a href="/cennik" class="underline underline-offset-2 hover:text-ink transition-colors">15 zł/msc bez limitu</a>
+          Jednorazowo {PRICES.ONE_TIME} lub <a href="/cennik" class="underline underline-offset-2 hover:text-ink transition-colors">{PRICES.MONTHLY_PER} bez limitu</a>
         </p>
       </div>
     </div>

@@ -1,5 +1,6 @@
 ---
 import Base from '../layouts/Base.astro';
+import { PRICES } from '../lib/constants';
 
 const faqSchema = {
   "@context": "https://schema.org",
@@ -342,7 +343,7 @@ const howToSchema = {
     <div class="max-w-4xl mx-auto px-4 py-10">
       <div class="max-w-2xl mx-auto">
         <h2 class="text-lg font-bold text-ink mb-1">5. niejedzie.pl — monitoring przesiadek i alertów</h2>
-        <p class="text-xs text-ink-faint mb-5">niejedzie.pl &middot; Przeglądarka (PWA) &middot; Sprawdzenie opóźnienia darmowe, monitoring 5 zł</p>
+        <p class="text-xs text-ink-faint mb-5">niejedzie.pl &middot; Przeglądarka (PWA) &middot; Sprawdzenie opóźnienia darmowe, monitoring {PRICES.ONE_TIME}</p>
 
         <div class="space-y-4 text-sm text-ink-secondary">
           <p>
@@ -604,9 +605,9 @@ const howToSchema = {
           <!-- CTA -->
           <div class="bg-brand-50 rounded-xl p-5 border border-brand-200 text-center mt-4">
             <p class="text-sm font-semibold text-ink mb-2">Nie ryzykuj utraty przesiadki</p>
-            <p class="text-xs text-ink-muted mb-4">Za 5 zł monitorujemy Twój pociąg i damy Ci znać jeśli przesiadka jest zagrożona. Podpowiemy alternatywne połączenia.</p>
+            <p class="text-xs text-ink-muted mb-4">Za {PRICES.ONE_TIME} monitorujemy Twój pociąg i damy Ci znać jeśli przesiadka jest zagrożona. Podpowiemy alternatywne połączenia.</p>
             <a href="/" class="inline-block px-6 py-2.5 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-xl transition-colors text-sm">
-              Monitoruj przesiadkę — 5 zł
+              Monitoruj przesiadkę — {PRICES.ONE_TIME}
             </a>
           </div>
         </div>

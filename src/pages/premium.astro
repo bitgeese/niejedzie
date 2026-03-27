@@ -1,5 +1,6 @@
 ---
 import Base from '../layouts/Base.astro';
+import { PRICES } from '../lib/constants';
 ---
 <Base title="Plan miesięczny — nielimitowany monitoring przesiadek" description="15 zł/msc za nielimitowany monitoring przesiadek PKP. Priorytetowe alerty, historia tras, pomoc z reklamacją. Anulujesz kiedy chcesz.">
 
@@ -14,13 +15,13 @@ import Base from '../layouts/Base.astro';
           <span class="text-brand-300">Jedna cena.</span>
         </h1>
         <p class="text-[1.125rem] text-white/50 max-w-lg mx-auto leading-relaxed mb-4">
-          Nielimitowany monitoring przesiadek za 15&nbsp;zł/msc. Priorytetowe alerty, historia Twoich tras, pomoc w&nbsp;reklamacjach.
+          Nielimitowany monitoring przesiadek za {PRICES.MONTHLY_PER}. Priorytetowe alerty, historia Twoich tras, pomoc w&nbsp;reklamacjach.
         </p>
         <p class="text-[0.875rem] text-white/30 mb-10">Anulujesz kiedy chcesz. Bez zobowiązań. Bez haczyków.</p>
 
         <div class="flex flex-col sm:flex-row gap-3 justify-center mb-6">
           <button class="btn-primary text-base px-10 py-4" onclick="checkout('subscription')">
-            Zacznij za 15 zł/msc
+            Zacznij za {PRICES.MONTHLY_PER}
           </button>
         </div>
         <p class="font-ticket text-[0.625rem] text-white/20 tracking-wider uppercase">
@@ -61,7 +62,7 @@ import Base from '../layouts/Base.astro';
   <!-- Benefits breakdown -->
   <section class="bg-surface-dark rounded-3xl mx-4 md:mx-8 lg:mx-auto lg:max-w-5xl">
     <div class="px-8 py-16">
-      <p class="section-label text-brand-300 text-center mb-12">// co dostajesz za 15 zł/msc</p>
+      <p class="section-label text-brand-300 text-center mb-12">// co dostajesz za {PRICES.MONTHLY_PER}</p>
       <div class="grid md:grid-cols-2 gap-x-12 gap-y-10 max-w-3xl mx-auto">
         <div>
           <div class="step-number mb-4 bg-brand-500/20 border-brand-500/30 text-brand-300">01</div>
@@ -115,8 +116,8 @@ import Base from '../layouts/Base.astro';
               <span class="text-[0.875rem] text-ink-secondary">1 przesiadka</span>
             </div>
             <div class="flex items-center gap-6">
-              <span class="font-ticket text-[0.875rem] text-ink-secondary">5 zł</span>
-              <span class="font-ticket text-[0.875rem] text-brand-500 font-semibold">15 zł</span>
+              <span class="font-ticket text-[0.875rem] text-ink-secondary">{PRICES.ONE_TIME}</span>
+              <span class="font-ticket text-[0.875rem] text-brand-500 font-semibold">{PRICES.MONTHLY}</span>
             </div>
           </div>
           <div class="flex items-center justify-between px-6 py-4">
@@ -126,7 +127,7 @@ import Base from '../layouts/Base.astro';
             </div>
             <div class="flex items-center gap-6">
               <span class="font-ticket text-[0.875rem] text-ink-secondary">10 zł</span>
-              <span class="font-ticket text-[0.875rem] text-brand-500 font-semibold">15 zł</span>
+              <span class="font-ticket text-[0.875rem] text-brand-500 font-semibold">{PRICES.MONTHLY}</span>
             </div>
           </div>
           <div class="flex items-center justify-between px-6 py-4 bg-brand-50/50">
@@ -135,8 +136,8 @@ import Base from '../layouts/Base.astro';
               <span class="text-[0.875rem] text-ink font-semibold">3 przesiadki &mdash; punkt zwrotny</span>
             </div>
             <div class="flex items-center gap-6">
-              <span class="font-ticket text-[0.875rem] text-ink-secondary">15 zł</span>
-              <span class="font-ticket text-[0.875rem] text-brand-500 font-bold">15 zł</span>
+              <span class="font-ticket text-[0.875rem] text-ink-secondary">{PRICES.MONTHLY}</span>
+              <span class="font-ticket text-[0.875rem] text-brand-500 font-bold">{PRICES.MONTHLY}</span>
             </div>
           </div>
           <div class="flex items-center justify-between px-6 py-4">
@@ -146,7 +147,7 @@ import Base from '../layouts/Base.astro';
             </div>
             <div class="flex items-center gap-6">
               <span class="font-ticket text-[0.875rem] text-ink-secondary line-through">25 zł</span>
-              <span class="font-ticket text-[0.875rem] text-brand-500 font-bold">15 zł</span>
+              <span class="font-ticket text-[0.875rem] text-brand-500 font-bold">{PRICES.MONTHLY}</span>
             </div>
           </div>
           <div class="flex items-center justify-between px-6 py-4">
@@ -156,7 +157,7 @@ import Base from '../layouts/Base.astro';
             </div>
             <div class="flex items-center gap-6">
               <span class="font-ticket text-[0.875rem] text-ink-secondary line-through">50 zł</span>
-              <span class="font-ticket text-[0.875rem] text-brand-500 font-bold">15 zł</span>
+              <span class="font-ticket text-[0.875rem] text-brand-500 font-bold">{PRICES.MONTHLY}</span>
             </div>
           </div>
         </div>
@@ -271,7 +272,7 @@ import Base from '../layouts/Base.astro';
             <span class="text-ink-faint group-open:rotate-45 transition-transform text-lg">+</span>
           </summary>
           <div class="px-5 pb-4 text-[0.875rem] text-ink-muted leading-relaxed">
-            Od 3 przesiadek w miesiącu. Jednorazowy monitoring to 5&nbsp;zł za przesiadkę &mdash; przy trzech płacisz już tyle co za subskrypcję (15&nbsp;zł). Ale z planem miesięcznym dostajesz więcej: nielimitowany monitoring, historię tras, priorytetowe alerty i pomoc z reklamacją. Przy 5 przesiadkach oszczędzasz 10&nbsp;zł. Przy 10 &mdash; 35&nbsp;zł.
+            Od 3 przesiadek w miesiącu. Jednorazowy monitoring to {PRICES.ONE_TIME} za przesiadkę &mdash; przy trzech płacisz już tyle co za subskrypcję ({PRICES.MONTHLY}). Ale z planem miesięcznym dostajesz więcej: nielimitowany monitoring, historię tras, priorytetowe alerty i pomoc z reklamacją. Przy 5 przesiadkach oszczędzasz 10&nbsp;zł. Przy 10 &mdash; 35&nbsp;zł.
           </div>
         </details>
 
@@ -311,14 +312,14 @@ import Base from '../layouts/Base.astro';
   <!-- Final CTA -->
   <section class="max-w-5xl mx-auto px-5 py-24 text-center">
     <h2 class="text-[2rem] md:text-[2.5rem] font-extrabold text-ink mb-4 tracking-tight leading-tight">
-      15 zł/msc.<br/>Wszystkie przesiadki. Zero stresu.
+      {PRICES.MONTHLY_PER}.<br/>Wszystkie przesiadki. Zero stresu.
     </h2>
     <p class="text-ink-muted mb-8 max-w-md mx-auto text-[1.0625rem] leading-relaxed">
       Włącz plan miesięczny i zapomnij o sprawdzaniu opóźnień. Damy Ci znać kiedy trzeba reagować.
     </p>
     <div class="flex flex-col sm:flex-row gap-3 justify-center mb-6">
       <button class="btn-primary text-base px-10 py-4" onclick="checkout('subscription')">
-        Zacznij za 15 zł/msc
+        Zacznij za {PRICES.MONTHLY_PER}
       </button>
       <a href="/cennik" class="btn-secondary text-base px-8 py-4">
         Porównaj plany

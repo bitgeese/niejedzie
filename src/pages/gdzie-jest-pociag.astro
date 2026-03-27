@@ -4,6 +4,8 @@ export const prerender = false;
 import Base from '../layouts/Base.astro';
 import StatCard from '../components/StatCard.astro';
 import StationTimeline from '../components/StationTimeline.astro';
+import { PRICES } from '../lib/constants';
+import { fetchTodayDelays } from '../lib/fetch-data';
 
 // ── Search logic ────────────────────────────────────────────────────────
 const searchQuery = Astro.url.searchParams.get('q')?.trim() || '';
@@ -18,6 +20,26 @@ if (searchQuery) {
       searchResult = await res.json();
       if (searchResult?.error && !searchResult?.train) {
         searchError = searchResult.error;
+      }
+    }
+  } catch {}
+}
+
+// If no search query, try to show the most recently delayed train
+if (!searchQuery) {
+  const baseUrl = import.meta.env.PROD ? 'https://niejedzie.pl' : 'http://localhost:4321';
+  try {
+    const todayData = await fetchTodayDelays();
+    const topTrain = todayData?.topDelayed?.[0];
+    if (topTrain?.trainNumber) {
+      // Strip prefix for search (API strips it internally too)
+      const numericPart = topTrain.trainNumber.replace(/^[A-Z]+ /, '');
+      const trainRes = await fetch(`${baseUrl}/api/train/search?q=${encodeURIComponent(numericPart)}`);
+      if (trainRes.ok) {
+        const trainData = await trainRes.json();
+        if (trainData?.train && trainData?.stations?.length > 0) {
+          searchResult = trainData;
+        }
       }
     }
   } catch {}
@@ -166,12 +188,7 @@ const delayBadgeText = currentDelay === 0 ? 'Punktualnie' : `+${currentDelay} mi
       <p class="text-[1rem] text-white/50 max-w-md mx-auto leading-relaxed mb-3">
         Wpisz numer pociągu i&nbsp;sprawdź aktualną pozycję, opóźnienie i&nbsp;przystanki na trasie.
       </p>
-      {!hasSearchResult && !searchQuery && (
-        <p class="font-ticket text-[0.625rem] text-brand-300/60 uppercase tracking-widest mb-8">// wersja demo — wkrótce wyszukiwanie na żywo</p>
-      )}
-      {(hasSearchResult || searchQuery) && (
-        <div class="mb-8"></div>
-      )}
+      <div class="mb-8"></div>
 
       <div class="max-w-md mx-auto">
         <form class="flex gap-2.5" action="/gdzie-jest-pociag" method="GET">
@@ -187,7 +204,7 @@ const delayBadgeText = currentDelay === 0 ? 'Punktualnie' : `+${currentDelay} mi
           <button type="submit" class="btn-primary shrink-0 px-6">Szukaj</button>
         </form>
         <p class="font-ticket text-[0.625rem] text-white/30 mt-4 tracking-wider uppercase">
-          np. IC 5313 &middot; EIC 1701 &middot; TLK 38103 &middot; R 94531
+          np. IC 3501 &middot; EIC 1700 &middot; TLK 31100 &middot; IC 5300
         </p>
       </div>
     </div>
@@ -304,7 +321,7 @@ const delayBadgeText = currentDelay === 0 ? 'Punktualnie' : `+${currentDelay} mi
               <p class="text-[0.875rem] text-ink-muted mb-5">Włącz monitoring i&nbsp;dostaniesz alert jeśli opóźnienie zagrozi Twojemu połączeniu.</p>
               <a href="/" class="btn-primary">Monitoruj przesiadkę</a>
               <p class="text-center text-[0.6875rem] text-ink-faint mt-3">
-                Jednorazowo 5 zł lub <a href="/cennik" class="underline underline-offset-2 hover:text-ink transition-colors">15 zł/msc bez limitu</a>
+                Jednorazowo {PRICES.ONE_TIME} lub <a href="/cennik" class="underline underline-offset-2 hover:text-ink transition-colors">{PRICES.MONTHLY_PER} bez limitu</a>
               </p>
             </div>
           </div>
@@ -332,7 +349,7 @@ const delayBadgeText = currentDelay === 0 ? 'Punktualnie' : `+${currentDelay} mi
 
       <h3 class="text-[1.125rem] font-bold text-ink tracking-tight mt-8 mb-3">Często szukane pociągi</h3>
       <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-        {['IC 5313', 'EIC 1701', 'TLK 38103', 'IC 350', 'EIC 1100', 'IC 6103', 'TLK 51100', 'R 94531'].map(train => (
+        {['IC 3501', 'EIC 1700', 'TLK 31100', 'IC 5300', 'EIC 1301', 'IC 6100', 'TLK 18100', 'IC 8300'].map(train => (
           <a href={`/gdzie-jest-pociag?q=${encodeURIComponent(train)}`} class="ticket-card rounded-lg p-3 text-center font-ticket text-[0.8125rem] font-medium text-ink hover:text-brand-500 transition-colors">
             {train}
           </a>
