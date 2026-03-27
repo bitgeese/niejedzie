@@ -176,7 +176,7 @@ import Base from '../layouts/Base.astro';
       </div>
     </div>
 
-    <script>
+    <script is:inline>
       function updateCalc(n) {
         const onetimePrice = n * 5;
         const monthlyPrice = 15;
@@ -342,7 +342,7 @@ import Base from '../layouts/Base.astro';
     </div>
   </section>
 
-  <script>
+  <script is:inline>
     async function checkout(mode) {
       const res = await fetch('/api/checkout/create', {
         method: 'POST',

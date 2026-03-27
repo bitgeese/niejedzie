@@ -444,7 +444,7 @@ const exampleTrain = liveTopTrain ? {
     <p class="text-[0.8125rem] text-ink-faint mt-5">3 przesiadki w miesiącu? Subskrypcja już się zwraca.</p>
   </section>
 
-  <script>
+  <script is:inline>
     async function checkout(mode) {
       const res = await fetch('/api/checkout/create', {
         method: 'POST',

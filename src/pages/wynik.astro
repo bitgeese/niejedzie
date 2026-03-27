@@ -294,7 +294,7 @@ const bufferColor = transfer.currentBuffer > 20 ? 'green' : transfer.currentBuff
     <p class="text-xs text-ink-faint mt-3">3 przesiadki w miesiącu? Plan miesięczny już się opłaca.</p>
   </section>
 
-  <script>
+  <script is:inline>
     async function checkout(mode) {
       const res = await fetch('/api/checkout/create', {
         method: 'POST',

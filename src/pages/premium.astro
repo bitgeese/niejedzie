@@ -329,7 +329,7 @@ import Base from '../layouts/Base.astro';
     </p>
   </section>
 
-  <script>
+  <script is:inline>
     async function checkout(mode) {
       const res = await fetch('/api/checkout/create', {
         method: 'POST',
