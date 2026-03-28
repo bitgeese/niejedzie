@@ -18,10 +18,10 @@ const cityData = await fetchCityData(CITY_SLUG) ?? EMPTY_CITY;
 const liveDisruptions = await fetchDisruptions() ?? [];
 const hasData = cityData.today.trainCount > 0;
 
-// Use live stats or fallback
-const trainsToday = hasData ? cityData.today.trainCount : 342;
-const avgDelay = hasData ? cityData.today.avgDelay : 12;
-const punctuality = hasData ? cityData.today.punctuality : 71.3;
+// Use live stats only - NO MOCK DATA
+const trainsToday = hasData ? cityData.today.trainCount : 0;
+const avgDelay = hasData ? cityData.today.avgDelay : 0;
+const punctuality = hasData ? cityData.today.punctuality : 0;
 
 // Live top delayed trains from API
 const liveTopTrains = cityData.topDelayed.map(t => ({
@@ -31,39 +31,21 @@ const liveTopTrains = cityData.topDelayed.map(t => ({
   station: t.station,
 }));
 
-// Mock fallback for top trains
-const mockTopTrains = [
-  { number: 'IC 5313', route: 'Kraków Gł. → Warszawa C.', avgDelay: 18, punctuality: 62 },
-  { number: 'EIC 1701', route: 'Warszawa C. → Gdańsk Gł.', avgDelay: 14, punctuality: 68 },
-  { number: 'TLK 38103', route: 'Wrocław Gł. → Warszawa C.', avgDelay: 22, punctuality: 54 },
-  { number: 'IC 350', route: 'Warszawa C. → Poznań Gł.', avgDelay: 9, punctuality: 76 },
-  { number: 'EIC 1100', route: 'Warszawa C. → Kraków Gł.', avgDelay: 11, punctuality: 73 },
-];
-const topTrains = liveTopTrains.length > 0 ? liveTopTrains : mockTopTrains;
+// Use live trains only - NO MOCK DATA
+const topTrains = liveTopTrains;
 const hasLiveTrains = liveTopTrains.length > 0;
 
-// Mock data for sparklines (keep until we have 7+ days of history)
-const sparklineTrains = [
-  { number: 'IC 5313', data: [4, 12, 8, 18, 6, 14, 10] },
-  { number: 'EIC 1701', data: [2, 5, 14, 3, 8, 6, 4] },
-  { number: 'TLK 38103', data: [15, 22, 18, 25, 20, 12, 22] },
-  { number: 'IC 350', data: [3, 0, 9, 5, 2, 7, 4] },
-  { number: 'EIC 1100', data: [8, 11, 6, 14, 9, 5, 11] },
-  { number: 'IC 6103', data: [6, 10, 4, 8, 16, 12, 7] },
-];
+// NO MOCK DATA - empty arrays if no real data
+const sparklineTrains = []; // Will show "no data available" message
 
-// Live disruptions mapped to display format, with mock fallback
-const mockDisruptions = [
-  { title: 'Roboty torowe Warszawa Zachodnia', desc: 'Opóźnienia do 15 min na trasach przez Warszawę Zachodnią. Planowane zakończenie: 28.03.', severity: 'warn' },
-  { title: 'Awaria sieci trakcyjnej Pruszków', desc: 'Ruch jednotorowy na odcinku Pruszków–Warszawa Wlochy. Możliwe opóźnienia do 25 min.', severity: 'danger' },
-];
+// Live disruptions only - NO MOCK DATA
 const disruptions = liveDisruptions.length > 0
   ? liveDisruptions.map(d => ({
       title: `${d.startStation} — ${d.endStation}`,
       desc: d.message,
       severity: d.typeCode === 'disruption' ? 'danger' : 'warn',
     }))
-  : mockDisruptions;
+  : []; // Empty if no real disruptions
 
 function punctualityBadge(p: number) {
   if (p >= 75) return 'safe';

@@ -70,7 +70,9 @@ const stations = hasSearchResult
 
 // ── Computed values for real data ───────────────────────────────────────
 const currentDelay = hasSearchResult
-  ? Math.max(...searchResult.stations.filter((s: any) => s.passed).map((s: any) => s.delay), 0)
+  ? (searchResult.stations.find((s: any) => s.current)?.delay
+    ?? searchResult.stations.filter((s: any) => s.passed).at(-1)?.delay
+    ?? 0)
   : 18;
 
 const passedCount = hasSearchResult

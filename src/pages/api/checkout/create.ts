@@ -10,8 +10,34 @@ export const POST: APIRoute = async ({ request }) => {
     const body = await request.json();
     const { mode, trainA, trainB, transferStation, operatingDate } = body;
 
+    // Validate required parameters
     if (!mode || !['payment', 'subscription'].includes(mode)) {
-      return Response.json({ error: 'Invalid mode' }, { status: 400 });
+      return Response.json({ error: 'Nieprawidłowy tryb płatności' }, { status: 400 });
+    }
+
+    // Validate train parameters for connection monitoring
+    if (mode === 'payment') {
+      if (!trainA || !trainB || typeof trainA !== 'string' || typeof trainB !== 'string') {
+        return Response.json({
+          error: 'Brak danych pociągów',
+          detail: 'Wymagane są numery pociągów A i B'
+        }, { status: 400 });
+      }
+
+      // Basic format validation for train numbers (allow letters and numbers)
+      const trainPattern = /^[A-Za-z0-9\s]+$/;
+      if (!trainPattern.test(trainA) || !trainPattern.test(trainB)) {
+        return Response.json({
+          error: 'Nieprawidłowy format numeru pociągu',
+          detail: 'Numer pociągu może zawierać tylko litery i cyfry'
+        }, { status: 400 });
+      }
+
+      if (!transferStation || typeof transferStation !== 'string') {
+        return Response.json({
+          error: 'Brak stacji przesiadkowej'
+        }, { status: 400 });
+      }
     }
 
     const stripe = getStripe(env.STRIPE_SECRET_KEY);

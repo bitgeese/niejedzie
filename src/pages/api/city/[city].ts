@@ -60,7 +60,14 @@ export const GET: APIRoute = async ({ params }) => {
     }
 
     const cityConfig = CITY_PREFIXES[citySlug];
-    const today = new Date().toISOString().split('T')[0];
+    // TIMEZONE FIX: Use Poland timezone instead of server time
+    const now = new Date();
+    const polandTime = new Date(now.toLocaleString("en-US", {timeZone: "Europe/Warsaw"}));
+    const today = [
+      polandTime.getFullYear(),
+      String(polandTime.getMonth() + 1).padStart(2, '0'),
+      String(polandTime.getDate()).padStart(2, '0'),
+    ].join('-');
 
     // Build SQL WHERE clause for prefix-based LIKE matching
     const likeClauses = cityConfig.prefixes.map(() => 'station_name LIKE ?').join(' OR ');

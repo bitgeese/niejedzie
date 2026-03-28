@@ -65,10 +65,26 @@ export const POST: APIRoute = async ({ request }) => {
         break;
       }
     }
+    return new Response(JSON.stringify({ received: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
   } catch (err: any) {
-    console.error('[webhook] Handler error:', err.message);
-    // Return 200 anyway — don't retry on handler errors
-  }
+    console.error('[webhook] Failed to process webhook event:', err.message);
+    console.error('[webhook] Event type:', event?.type);
+    console.error('[webhook] Event ID:', event?.id);
 
-  return new Response('OK', { status: 200 });
+    // Return 500 so Stripe will retry the webhook
+    return new Response(
+      JSON.stringify({
+        error: 'Webhook processing failed',
+        message: err.message,
+        event_id: event?.id
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' }
+      }
+    );
+  }
 };

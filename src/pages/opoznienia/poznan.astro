@@ -19,50 +19,26 @@ const liveDisruptions = await fetchDisruptions() ?? [];
 const hasData = cityData.today.trainCount > 0;
 
 // Use live stats or fallback
-const trainsToday = hasData ? cityData.today.trainCount : 186;
-const avgDelay = hasData ? cityData.today.avgDelay : 10;
-const punctuality = hasData ? cityData.today.punctuality : 74.5;
+const trainsToday = hasData ? cityData.today.trainCount : 0;
+const avgDelay = hasData ? cityData.today.avgDelay : 0;
+const punctuality = hasData ? cityData.today.punctuality : 0;
 
-// Live top delayed trains from API
-const liveTopTrains = cityData.topDelayed.map(t => ({
+const topTrains = cityData.topDelayed.map(t => ({
   number: t.trainNumber,
   route: t.route,
   avgDelay: t.delay,
   station: t.station,
+  carrier: t.carrier,
 }));
+const hasLiveTrains = topTrains.length > 0;
 
-// Mock fallback for top trains
-const mockTopTrains = [
-  { number: 'IC 350', route: 'Warszawa C. → Poznań Gł.', avgDelay: 12, punctuality: 71 },
-  { number: 'EIC 1400', route: 'Poznań Gł. → Wrocław Gł.', avgDelay: 11, punctuality: 72 },
-  { number: 'IC 7200', route: 'Wrocław Gł. → Poznań Gł.', avgDelay: 14, punctuality: 67 },
-  { number: 'TLK 27100', route: 'Poznań Gł. → Gdańsk Gł.', avgDelay: 16, punctuality: 63 },
-  { number: 'R 77301', route: 'Poznań Gł. → Gniezno', avgDelay: 6, punctuality: 82 },
-];
-const topTrains = liveTopTrains.length > 0 ? liveTopTrains : mockTopTrains;
-const hasLiveTrains = liveTopTrains.length > 0;
+const sparklineTrains: Array<{ number: string; data: number[]; carrier?: string }> = [];
 
-// Mock data for sparklines (keep until we have 7+ days of history)
-const sparklineTrains = [
-  { number: 'IC 350', data: [5, 10, 12, 6, 14, 8, 9] },
-  { number: 'EIC 1400', data: [4, 8, 11, 6, 12, 8, 7] },
-  { number: 'IC 7200', data: [8, 14, 10, 18, 12, 6, 14] },
-  { number: 'TLK 27100', data: [10, 16, 14, 20, 12, 8, 16] },
-  { number: 'R 77301', data: [2, 4, 6, 3, 8, 4, 3] },
-  { number: 'EIC 1700', data: [3, 7, 5, 9, 6, 4, 8] },
-];
-
-// Live disruptions mapped to display format, with mock fallback
-const mockDisruptions = [
-  { title: 'Modernizacja Poznań Główny — peron 4', desc: 'Zmiana peronów dla wybranych pociągów regionalnych. Sprawdzaj tablice informacyjne. Możliwe opóźnienia do 5 min.', severity: 'warn' },
-];
-const disruptions = liveDisruptions.length > 0
-  ? liveDisruptions.map(d => ({
-      title: `${d.startStation} — ${d.endStation}`,
-      desc: d.message,
-      severity: d.typeCode === 'disruption' ? 'danger' : 'warn',
-    }))
-  : mockDisruptions;
+const disruptions = liveDisruptions.map(d => ({
+  title: `${d.startStation} — ${d.endStation}`,
+  desc: d.message,
+  severity: d.typeCode === 'disruption' ? 'danger' : 'warn',
+}));
 
 function punctualityBadge(p: number) {
   if (p >= 75) return 'safe';
@@ -124,10 +100,10 @@ function punctualityBadge(p: number) {
   <section class="max-w-5xl mx-auto px-5 pb-12 fade-up">
     <p class="section-label mb-4">// najczęściej opóźniane</p>
     <h2 class="text-[1.25rem] font-bold text-ink tracking-tight mb-6">Top opóźnionych pociągów</h2>
-    {hasLiveTrains && topTrains.length === 0 ? (
+    {!hasLiveTrains ? (
       <div class="bg-surface-sunken rounded-xl p-6 text-center">
-        <p class="font-ticket text-ink-faint text-sm">// brak opóźnień</p>
-        <p class="text-ink-muted text-sm mt-2">Aktualnie brak opóźnionych pociągów w {CITY_NAME}.</p>
+        <p class="font-ticket text-ink-faint text-sm">// brak danych</p>
+        <p class="text-ink-muted text-sm mt-2">Dane będą dostępne wkrótce.</p>
       </div>
     ) : (
       <div class="space-y-3">
@@ -144,11 +120,8 @@ function punctualityBadge(p: number) {
               <div class="flex items-center gap-3 shrink-0">
                 <div class="text-right">
                   <span class="font-ticket font-semibold text-[0.875rem] text-ink">+{train.avgDelay} min</span>
-                  <p class="font-ticket text-[0.6rem] text-ink-faint tracking-wider uppercase">{hasLiveTrains ? 'Opóźnienie' : 'Śr. opóźn.'}</p>
+                  <p class="font-ticket text-[0.6rem] text-ink-faint tracking-wider uppercase">Opóźnienie</p>
                 </div>
-                {!hasLiveTrains && train.punctuality && (
-                  <span class={`badge badge-${punctualityBadge(train.punctuality)}`}>{train.punctuality}%</span>
-                )}
               </div>
             </div>
           </div>
@@ -160,35 +133,49 @@ function punctualityBadge(p: number) {
   <section class="max-w-5xl mx-auto px-5 pb-12 fade-up">
     <p class="section-label mb-4">// trend opóźnień (7 dni)</p>
     <h2 class="text-[1.25rem] font-bold text-ink tracking-tight mb-6">Wzorce opóźnień</h2>
-    <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
-      {sparklineTrains.map((train, i) => (
-        <div class="bg-surface-raised rounded-xl border border-border p-4">
-          <div class="flex items-center justify-between mb-3">
-            <TrainOperator trainNumber={train.number} carrier={train.carrier} iconSize="sm" />
-            <span class="font-ticket text-[0.6875rem] text-ink-faint">avg +{Math.round(train.data.reduce((a, b) => a + b, 0) / train.data.length)} min</span>
+    {sparklineTrains.length === 0 ? (
+      <div class="bg-surface-sunken rounded-xl p-6 text-center">
+        <p class="font-ticket text-ink-faint text-sm">// brak danych</p>
+        <p class="text-ink-muted text-sm mt-2">Dane będą dostępne wkrótce.</p>
+      </div>
+    ) : (
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+        {sparklineTrains.map((train, i) => (
+          <div class="bg-surface-raised rounded-xl border border-border p-4">
+            <div class="flex items-center justify-between mb-3">
+              <TrainOperator trainNumber={train.number} carrier={train.carrier} iconSize="sm" />
+              <span class="font-ticket text-[0.6875rem] text-ink-faint">avg +{Math.round(train.data.reduce((a, b) => a + b, 0) / train.data.length)} min</span>
+            </div>
+            <div id={`sparkline-${i}`} style="min-height: 50px;"></div>
           </div>
-          <div id={`sparkline-${i}`} style="min-height: 50px;"></div>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+    )}
   </section>
 
   <section class="max-w-5xl mx-auto px-5 pb-12 fade-up">
     <p class="section-label mb-4">// aktywne utrudnienia</p>
     <h2 class="text-[1.25rem] font-bold text-ink tracking-tight mb-6">Utrudnienia w&nbsp;{city}</h2>
-    <div class="space-y-3">
-      {disruptions.map(d => (
-        <div class={`bg-surface-raised rounded-xl border-l-4 ${d.severity === 'danger' ? 'border-l-delay-danger' : 'border-l-delay-warn'} border border-border p-4`}>
-          <div class="flex items-start gap-3">
-            <span class={`badge badge-${d.severity} shrink-0 mt-0.5`}>{d.severity === 'danger' ? 'Awaria' : 'Roboty'}</span>
-            <div>
-              <p class="text-[0.875rem] font-semibold text-ink mb-1">{d.title}</p>
-              <p class="text-[0.8125rem] text-ink-muted leading-relaxed">{d.desc}</p>
+    {disruptions.length === 0 ? (
+      <div class="bg-surface-sunken rounded-xl p-6 text-center">
+        <p class="font-ticket text-ink-faint text-sm">// brak utrudnień</p>
+        <p class="text-ink-muted text-sm mt-2">Brak aktywnych utrudnień na trasach przez {city}.</p>
+      </div>
+    ) : (
+      <div class="space-y-3">
+        {disruptions.map(d => (
+          <div class={`bg-surface-raised rounded-xl border-l-4 ${d.severity === 'danger' ? 'border-l-delay-danger' : 'border-l-delay-warn'} border border-border p-4`}>
+            <div class="flex items-start gap-3">
+              <span class={`badge badge-${d.severity} shrink-0 mt-0.5`}>{d.severity === 'danger' ? 'Awaria' : 'Roboty'}</span>
+              <div>
+                <p class="text-[0.875rem] font-semibold text-ink mb-1">{d.title}</p>
+                <p class="text-[0.8125rem] text-ink-muted leading-relaxed">{d.desc}</p>
+              </div>
             </div>
           </div>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+    )}
   </section>
 
   <section class="border-t border-border bg-surface-raised fade-up">

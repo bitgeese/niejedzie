@@ -80,7 +80,14 @@ export const GET: APIRoute = async () => {
     }
 
     // ── Fallback: D1 queries ─────────────────────────────────────────
-    const today = new Date().toISOString().split('T')[0];
+    // TIMEZONE FIX: Use Poland timezone instead of server time
+    const now = new Date();
+    const polandTime = new Date(now.toLocaleString("en-US", {timeZone: "Europe/Warsaw"}));
+    const today = [
+      polandTime.getFullYear(),
+      String(polandTime.getMonth() + 1).padStart(2, '0'),
+      String(polandTime.getDate()).padStart(2, '0'),
+    ].join('-');
 
     // Overall stats for today
     const statsRow = await env.DB.prepare(`
@@ -121,23 +128,33 @@ export const GET: APIRoute = async () => {
       avgDelay: r.avg_delay as number,
     }));
 
-    // Top delayed trains
+    // Top delayed trains — subquery to get the station with the actual max delay
     const topRows = await env.DB.prepare(`
       SELECT
-        ds.schedule_id,
-        ds.order_id,
-        COALESCE(t.train_number, ds.schedule_id || '/' || ds.order_id) AS train_number,
-        MAX(COALESCE(ds.arrival_delay, ds.departure_delay, 0)) AS max_delay,
-        COALESCE(t.route_start || ' → ' || t.route_end, '') AS route,
-        ds.station_name
-      FROM delay_snapshots ds
-      LEFT JOIN trains t ON t.schedule_id = ds.schedule_id AND t.order_id = ds.order_id
-      WHERE ds.operating_date = ?
-      GROUP BY ds.schedule_id, ds.order_id
-      HAVING max_delay > 0
-      ORDER BY max_delay DESC
+        agg.schedule_id,
+        agg.order_id,
+        COALESCE(t.train_number, agg.schedule_id || '/' || agg.order_id) AS train_number,
+        agg.max_delay,
+        COALESCE(t.route_start || ' \u2192 ' || t.route_end, '') AS route,
+        COALESCE(detail.station_name, '') AS station_name
+      FROM (
+        SELECT schedule_id, order_id,
+               MAX(COALESCE(arrival_delay, departure_delay, 0)) AS max_delay
+        FROM delay_snapshots
+        WHERE operating_date = ?
+        GROUP BY schedule_id, order_id
+        HAVING max_delay > 0
+      ) agg
+      LEFT JOIN trains t
+        ON t.schedule_id = agg.schedule_id AND t.order_id = agg.order_id
+      LEFT JOIN delay_snapshots detail
+        ON detail.schedule_id = agg.schedule_id
+        AND detail.order_id = agg.order_id
+        AND detail.operating_date = ?
+        AND COALESCE(detail.arrival_delay, detail.departure_delay, 0) = agg.max_delay
+      ORDER BY agg.max_delay DESC
       LIMIT 10
-    `).bind(today).all();
+    `).bind(today, today).all();
 
     const topDelayed: TopDelayed[] = (topRows.results || []).map((r) => ({
       trainNumber: r.train_number as string,
@@ -179,11 +196,15 @@ export const GET: APIRoute = async () => {
       },
     });
   } catch (err) {
-    console.error('[api/delays/today] Error:', err);
+    console.error('[api/delays/today] Database error:', err);
 
-    // Graceful degradation: return empty data, not 500
-    return new Response(JSON.stringify(emptyResponse()), {
-      status: 200,
+    // Return 503 Service Unavailable so clients can distinguish from "no delays"
+    return new Response(JSON.stringify({
+      error: 'Nie udało się pobrać danych opóźnień',
+      code: 'DATABASE_ERROR',
+      message: err instanceof Error ? err.message : 'Unknown error'
+    }), {
+      status: 503,
       headers: {
         'Content-Type': 'application/json',
         'Cache-Control': 'public, max-age=30',

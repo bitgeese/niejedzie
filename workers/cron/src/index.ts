@@ -509,6 +509,27 @@ async function pollOperations(env: Env): Promise<void> {
 		console.error(`[pollOperations] Failed to fetch disruptions from KV: ${err}`);
 	}
 
+	// Compute hourly delay breakdown from D1
+	let hourlyDelays: Array<{ hour: string; avgDelay: number }> = [];
+	try {
+		const hourlyRows = await env.DB.prepare(`
+			SELECT
+				strftime('%H:00', COALESCE(planned_departure, planned_arrival)) AS hour,
+				ROUND(AVG(COALESCE(departure_delay, arrival_delay, 0)), 1) AS avg_delay
+			FROM delay_snapshots
+			WHERE operating_date = ?
+				AND COALESCE(planned_departure, planned_arrival) IS NOT NULL
+			GROUP BY hour
+			ORDER BY hour
+		`).bind(today).all();
+		hourlyDelays = (hourlyRows.results || []).map((r: any) => ({
+			hour: r.hour as string,
+			avgDelay: r.avg_delay as number,
+		}));
+	} catch (err) {
+		console.warn(`[pollOperations] Failed to compute hourly delays: ${err}`);
+	}
+
 	// Write the full response shape that /api/delays/today expects
 	const todayStats = {
 		timestamp: new Date().toISOString(),
@@ -520,18 +541,16 @@ async function pollOperations(env: Env): Promise<void> {
 		gtfsRtTotalTrains: gtfsRtStats?.totalTrains ?? null,
 		gtfsRtByAgency: gtfsRtStats?.byAgency ?? null,
 		correctedPunctualityPct: fusionResult.correctedPunctuality,
-		// Portal Pasażera REAL punctuality stats (from s=1 page)
 		portalPunctualityOnRoute: portalStats?.onRoute ?? null,
 		portalPunctualityDeparted: portalStats?.departed ?? null,
 		portalPunctualityCompleted: portalStats?.completed ?? null,
 		portalTrainsStartedPct: portalStats?.startedPct ?? null,
-		// Enhanced fusion metadata
 		dataFusionConfidence: fusionResult.confidence,
 		dataFusionPrimarySource: fusionResult.primarySource,
 		dataValidationIssues: fusionResult.validationIssues,
 		topDelayed,
 		disruptions,
-		hourlyDelays: [] as Array<{ hour: string; avgDelay: number }>,
+		hourlyDelays,
 	};
 
 	await env.DELAYS_KV.put("stats:today", JSON.stringify(todayStats), {
@@ -553,29 +572,27 @@ async function pollOperations(env: Env): Promise<void> {
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`);
 
-	// PHASE 2 FIX: Add data validation before database insertion
+	// Validate stations before DB insertion
 	const validatedTrains = allTrains.map(train => {
 		const validStations = train.stations.filter(st => {
-			// Skip stations with no time data at all
-			if (!st.plannedArrival && !st.plannedDeparture &&
-				!st.actualArrival && !st.actualDeparture) {
-				console.warn(`[validation] Skipping station ${st.stationName} (${train.trainNumber}): all times null`);
+			// Skip stations with no name
+			if (!st.stationName || st.stationName.trim() === '') {
 				return false;
 			}
 
-			// Flag suspicious midnight times
-			if ((st.plannedArrival?.includes('T00:00:00') || st.actualArrival?.includes('T00:00:00')) &&
-				(st.plannedDeparture || st.actualDeparture)) {
-				console.warn(`[validation] Suspicious midnight time in ${st.stationName} (${train.trainNumber})`);
+			// Skip stations with no time data at all
+			if (!st.plannedArrival && !st.plannedDeparture &&
+				!st.actualArrival && !st.actualDeparture) {
+				return false;
 			}
 
 			return true;
 		});
 
 		return { ...train, stations: validStations };
-	}).filter(train => train.stations.length > 0); // Remove trains with no valid stations
+	}).filter(train => train.stations.length > 0);
 
-	console.log(`[validation] Filtered ${allTrains.length} → ${validatedTrains.length} trains after validation`);
+	console.log(`[validation] ${allTrains.length} trains → ${validatedTrains.length} after filtering (removed empty names/times)`);
 
 	const batch: D1PreparedStatement[] = [];
 	for (const train of validatedTrains) {

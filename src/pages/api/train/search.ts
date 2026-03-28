@@ -6,6 +6,7 @@
 export const prerender = false;
 import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
+import { formatTime, isActualTimeInPast, isPlannedTimeInPast } from '../../../lib/time-utils';
 
 interface StationResult {
   name: string;
@@ -103,12 +104,13 @@ export const GET: APIRoute = async ({ url }) => {
       orderId,
     };
 
-    // ── Get today's date in YYYY-MM-DD ───────────────────────────────
+    // ── Get today's date in YYYY-MM-DD (Poland timezone) ─────────────
     const now = new Date();
+    const polandTime = new Date(now.toLocaleString("en-US", {timeZone: "Europe/Warsaw"}));
     const operatingDate = [
-      now.getFullYear(),
-      String(now.getMonth() + 1).padStart(2, '0'),
-      String(now.getDate()).padStart(2, '0'),
+      polandTime.getFullYear(),
+      String(polandTime.getMonth() + 1).padStart(2, '0'),
+      String(polandTime.getDate()).padStart(2, '0'),
     ].join('-');
 
     // ── Query delay_snapshots for today ──────────────────────────────
@@ -164,16 +166,16 @@ export const GET: APIRoute = async ({ url }) => {
       );
     }
 
-    // ── Deduplicate by station_name — keep latest by recorded_at ─────
-    const stationMap = new Map<string, typeof snapshotRows.results[0]>();
+    // Deduplicate by sequence_num — keep latest recorded_at per position
+    // (Using station_name would collapse all null-named stations into one)
+    const stationMap = new Map<number, typeof snapshotRows.results[0]>();
     for (const row of snapshotRows.results) {
-      const name = row.station_name as string;
-      const existing = stationMap.get(name);
-      if (!existing) {
-        stationMap.set(name, row);
+      const seq = row.sequence_num as number;
+      if (!stationMap.has(seq)) {
+        stationMap.set(seq, row);
       }
       // rows are ordered by recorded_at DESC within same sequence_num,
-      // so the first occurrence per station_name is already the latest
+      // so the first occurrence per sequence_num is already the latest
     }
 
     // Build station list, ordered by sequence_num
@@ -188,6 +190,19 @@ export const GET: APIRoute = async ({ url }) => {
       const hasActual = r.actual_arrival !== null || r.actual_departure !== null;
       const isConfirmed = r.is_confirmed === 1;
 
+      // Primary: use confirmed actual times
+      let passed = hasActual && isConfirmed &&
+        isActualTimeInPast(r.actual_arrival as string | null, r.actual_departure as string | null, operatingDate);
+
+      // Fallback: use planned time when no actual data available
+      if (!passed && !hasActual) {
+        passed = isPlannedTimeInPast(
+          r.planned_departure as string | null,
+          r.planned_arrival as string | null,
+          operatingDate,
+        );
+      }
+
       return {
         name: (r.station_name as string) || '',
         plannedArr: formatTime(r.planned_arrival as string | null),
@@ -195,7 +210,7 @@ export const GET: APIRoute = async ({ url }) => {
         actualArr: formatTime(r.actual_arrival as string | null),
         actualDep: formatTime(r.actual_departure as string | null),
         delay,
-        passed: hasActual && isConfirmed,
+        passed,
         current: false,
       };
     });
@@ -206,12 +221,16 @@ export const GET: APIRoute = async ({ url }) => {
       stations[lastPassedIdx].current = true;
     }
 
+    // DATA FRESHNESS CHECK: Warn if data appears stale
+    const dataFreshness = validateDataFreshness(stations, operatingDate);
+
     const response: SearchResponse & { _debug?: any } = { train, stations, suggestions };
     response._debug = {
       matchCount: trainRows.results.length,
       scheduleIds: trainRows.results.map(r => r.schedule_id),
       operatingDate,
       rawSnapshotCount: snapshotRows.results.length,
+      dataFreshness,
     };
     return new Response(JSON.stringify(response), { headers });
   } catch (err) {
@@ -231,19 +250,30 @@ export const GET: APIRoute = async ({ url }) => {
 // ── Helpers ────────────────────────────────────────────────────────────
 
 /**
- * Formats time strings — they may come as "HH:MM:SS" or "HH:MM" from the DB.
- * Returns "HH:MM" or null.
+ * Validates data freshness and detects potential stale data issues
  */
-function formatTime(value: string | null): string | null {
-  if (!value) return null;
-  // Already HH:MM
-  if (/^\d{2}:\d{2}$/.test(value)) return value;
-  // HH:MM:SS → HH:MM
-  if (/^\d{2}:\d{2}:\d{2}$/.test(value)) return value.slice(0, 5);
-  // ISO datetime — extract time
-  if (value.includes('T')) {
-    const timePart = value.split('T')[1];
-    return timePart ? timePart.slice(0, 5) : null;
-  }
-  return value;
+function validateDataFreshness(stations: StationResult[], operatingDate: string) {
+  const now = new Date();
+  const polandTime = new Date(now.toLocaleString("en-US", {timeZone: "Europe/Warsaw"}));
+  const todayStr = [
+    polandTime.getFullYear(),
+    String(polandTime.getMonth() + 1).padStart(2, '0'),
+    String(polandTime.getDate()).padStart(2, '0'),
+  ].join('-');
+
+  const isToday = operatingDate === todayStr;
+  const passedCount = stations.filter(s => s.passed).length;
+  const futureActualTimes = stations.filter(s =>
+    s.passed === false && (s.actualArr || s.actualDep)
+  ).length;
+
+  return {
+    isToday,
+    operatingDate,
+    currentDate: todayStr,
+    passedStations: passedCount,
+    futureActualTimes,
+    warning: futureActualTimes > 0 ? 'Data contains future actual times - possible stale data' : null,
+  };
 }
+

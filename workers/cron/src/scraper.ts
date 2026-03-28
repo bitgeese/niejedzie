@@ -822,22 +822,9 @@ function parseTrainDetailPage(html: string): ApiStation[] | null {
 	const stationBlockRegex = /timeline__content-station[\s\S]*?(?=timeline__content-station|timeline__footer|$)/g;
 	const stationBlocks = html.match(stationBlockRegex);
 
-	// NEW: Enhanced logging to debug parsing failures
-	console.log(`[DEBUG] parseTrainDetailPage: HTML length=${html.length} chars`);
-	console.log(`[DEBUG] parseTrainDetailPage: Found ${stationBlocks?.length || 0} station blocks`);
-
 	if (!stationBlocks || stationBlocks.length === 0) {
-		console.warn('[scraper:detail] No station blocks found on detail page');
-		// NEW: Check if HTML contains expected elements
-		const hasTimelineClass = html.includes('timeline__content-station');
-		const hasAlternateClass = html.includes('timeline') && html.includes('station');
-		console.warn(`[DEBUG] HTML analysis: timeline__content-station=${hasTimelineClass}, timeline+station=${hasAlternateClass}`);
+		console.warn('[scraper:detail] No station blocks found in HTML');
 		return null;
-	}
-
-	// NEW: Warn if very low block count (likely indicates parsing issue)
-	if (stationBlocks.length < 5) {
-		console.warn(`[DEBUG] Very low station count (${stationBlocks.length}), may indicate regex mismatch with Portal HTML`);
 	}
 
 	for (let i = 0; i < stationBlocks.length; i++) {
@@ -863,14 +850,11 @@ function parseTrainDetailPage(html: string): ApiStation[] | null {
 			if (nameMatch) break;
 		}
 
-		// NEW: Debug what station name patterns exist in this block
 		if (!nameMatch) {
-			console.warn(`[DEBUG] Station ${i + 1}: No name match found in block`);
-			console.log(`[DEBUG] Block sample (first 200 chars): ${block.slice(0, 200)}`);
 			continue;
 		}
 
-		// NEW: Filter out non-station messages (redirects, errors, etc.)
+		// Filter out non-station messages (redirects, errors, etc.)
 		const rawStationName = nameMatch[1].trim();
 		const isRedirectMessage = rawStationName.toLowerCase().includes('przekierowywanie') ||
 			rawStationName.toLowerCase().includes('redirect') ||
@@ -882,7 +866,6 @@ function parseTrainDetailPage(html: string): ApiStation[] | null {
 		const isTooLong = rawStationName.length > 50; // Real station names are typically shorter
 
 		if (isRedirectMessage || isTooLong) {
-			console.warn(`[DEBUG] Station ${i + 1}: Skipping non-station text: "${rawStationName.slice(0, 50)}..."`);
 			continue;
 		}
 
@@ -930,16 +913,6 @@ function parseTrainDetailPage(html: string): ApiStation[] | null {
 		const isFirst = i === 0;
 		const isLast = i === stationBlocks.length - 1;
 		const isIntermediate = !isFirst && !isLast;
-
-		// NEW: Debug logging for each station's time extraction
-		console.log(`[DEBUG] Station ${i + 1}/${stationBlocks.length}: "${stationName}"`);
-		console.log(`[DEBUG]   Type: ${isFirst ? 'FIRST' : isLast ? 'LAST' : 'INTERMEDIATE'}`);
-		console.log(`[DEBUG]   Times found: ${times.length} [${times.join(', ')}]`);
-
-		// NEW: Warn about insufficient times for intermediate stations
-		if (isIntermediate && times.length < 4) {
-			console.warn(`[DEBUG]   WARNING: Intermediate station has ${times.length} times, expected 4`);
-		}
 
 		let plannedArrival: string | null = null;
 		let plannedDeparture: string | null = null;
@@ -1482,38 +1455,10 @@ export async function fetchFromScraper(env: Env): Promise<ApiTrain[] | null> {
 		// Fetch per-station detail pages for top trains
 		const detailMap = await fetchTrainDetails(session, scraped);
 
-		// Clean station names using Claude AI
-		const cleanedDetailMap = await cleanStationNamesInDetailMap(detailMap, env);
+		let trains = await transformToApiFormat(scraped, detailMap, env);
+		console.log(`[scraper] Transformed ${trains.length} trains to API format (${detailMap.size} with station details)`);
 
-		let trains = await transformToApiFormat(scraped, cleanedDetailMap, env);
-		console.log(`[scraper] Transformed ${trains.length} trains to API format (${cleanedDetailMap.size} with station details)`);
-
-		// PHASE 4 FIX: Complete incomplete routes (missing destinations)
-		const routeCompletionResults = [];
-		const completedTrains = [];
-
-		for (const train of trains) {
-			const isIncomplete = detectIncompleteRoute(train);
-
-			if (isIncomplete) {
-				const { completedTrain, completionResult } = await completeIncompleteRoute(train, env);
-				completedTrains.push(completedTrain);
-				routeCompletionResults.push({
-					trainNumber: train.trainNumber,
-					...completionResult
-				});
-
-				console.log(`[route-completion] Fixed incomplete route for ${train.trainNumber}: added [${completionResult.addedStations.join(', ')}] (confidence: ${completionResult.confidence})`);
-			} else {
-				completedTrains.push(train);
-			}
-		}
-
-		if (routeCompletionResults.length > 0) {
-			console.log(`[route-completion] Completed ${routeCompletionResults.length} incomplete routes`);
-		}
-
-		return completedTrains;
+		return trains;
 	} catch (err) {
 		console.error(`[scraper] Fatal error: ${err}`);
 		return null;
@@ -1638,6 +1583,78 @@ async function debugDetailPage(detailUrl: string, session: ScrapingSession): Pro
 	}
 
 	console.log(`[DEBUG] === End Diagnostic Test ===`);
+}
+
+// ---------------------------------------------------------------------------
+// Bright Data Enhanced Scraping Functions
+// ---------------------------------------------------------------------------
+
+/**
+ * Scrape train detail page using Bright Data API for enterprise reliability
+ */
+async function scrapeTrainDetailBrightData(detailUrl: string, env: Env): Promise<ApiStation[] | null> {
+	// Handle both absolute and relative URLs
+	const fullUrl = detailUrl.startsWith('http')
+		? detailUrl
+		: `${PORTAL_BASE}${detailUrl.startsWith('/') ? '' : '/'}${detailUrl}`;
+
+	console.log(`[bright-data] Fetching ${fullUrl.substring(0, 80)}...`);
+
+	const response = await fetch('https://api.brightdata.com/dca/trigger', {
+		method: 'POST',
+		headers: {
+			'Authorization': `Bearer ${env.BRIGHT_DATA_API_KEY}`,
+			'Content-Type': 'application/json'
+		},
+		body: JSON.stringify({
+			url: fullUrl,
+			country: 'PL',          // Polish residential IPs
+			session: 'sticky',      // Maintain cookies across requests
+			format: 'html',         // Raw HTML for our existing parser
+			timeout: 30000,         // 30s timeout for complex pages
+			render_js: false,       // Portal Pasażera is server-rendered
+			cookies: 'maintain'     // Handle cookie rotation automatically
+		})
+	});
+
+	if (!response.ok) {
+		const errorText = await response.text();
+		throw new Error(`Bright Data API failed: ${response.status} - ${errorText}`);
+	}
+
+	const html = await response.text();
+
+	// Validate we got a proper detail page
+	if (!html.includes('timeline__content-station') && !html.includes('SzczegolyPolaczenia')) {
+		console.warn(`[bright-data] Response doesn't look like a detail page (${html.length} bytes)`);
+		return null;
+	}
+
+	console.log(`[bright-data] Successfully retrieved HTML (${html.length} bytes)`);
+	return parseTrainDetailPage(html);
+}
+
+/**
+ * Enhanced train detail scraping with Bright Data fallback
+ * Uses enterprise-grade scraping for maximum reliability
+ */
+async function scrapeTrainDetailEnhanced(session: ScrapingSession, detailUrl: string, env: Env): Promise<ApiStation[] | null> {
+	// Try Bright Data first for maximum reliability
+	if (env.BRIGHT_DATA_API_KEY) {
+		try {
+			const stations = await scrapeTrainDetailBrightData(detailUrl, env);
+			if (stations && stations.length > 0) {
+				console.log(`[bright-data] Success: ${stations.length} stations for ${detailUrl.substring(0, 80)}`);
+				return stations;
+			}
+		} catch (error) {
+			console.warn(`[bright-data] Failed for ${detailUrl.substring(0, 80)}: ${error.message}, falling back to traditional scraping`);
+		}
+	}
+
+	// Fallback to traditional scraping
+	console.log(`[traditional] Attempting traditional scraping for ${detailUrl.substring(0, 80)}`);
+	return await scrapeTrainDetail(session, detailUrl);
 }
 
 // ---------------------------------------------------------------------------

@@ -2,18 +2,21 @@
 import Base from '../layouts/Base.astro';
 import { PRICES } from '../lib/constants';
 
-// Mock data — in production this comes from PKP PLK API
-const train1 = {
+// This is a demo page - connection monitoring is being developed
+const isDemoMode = true;
+
+// Demo data for UI preview only - NOT real train information
+const demoTrain1 = {
   number: 'IC 5313',
   from: 'Kraków Główny',
   to: 'Warszawa Centralna',
   scheduledArrival: '13:45',
   estimatedArrival: '14:03',
   delay: 18,
-  status: 'delayed', // 'on-time' | 'delayed' | 'late'
+  status: 'delayed',
 };
 
-const train2 = {
+const demoTrain2 = {
   number: 'EIC 1701',
   from: 'Warszawa Centralna',
   to: 'Gdańsk Główny',
@@ -23,17 +26,26 @@ const train2 = {
   status: 'on-time',
 };
 
-const transfer = {
+const demoTransfer = {
   station: 'Warszawa Centralna',
-  plannedBuffer: 30, // minutes
-  currentBuffer: 12, // minutes after delay
+  plannedBuffer: 30,
+  currentBuffer: 12,
 };
 
-// Buffer percentage for progress bar (inverted — less buffer = more filled/dangerous)
-const bufferUsedPercent = Math.round(((transfer.plannedBuffer - transfer.currentBuffer) / transfer.plannedBuffer) * 100);
-const bufferColor = transfer.currentBuffer > 20 ? 'green' : transfer.currentBuffer > 10 ? 'amber' : 'red';
+const bufferUsedPercent = Math.round(((demoTransfer.plannedBuffer - demoTransfer.currentBuffer) / demoTransfer.plannedBuffer) * 100);
+const bufferColor = demoTransfer.currentBuffer > 20 ? 'green' : demoTransfer.currentBuffer > 10 ? 'amber' : 'red';
 ---
-<Base title={`${train1.number} → ${train2.number} — przesiadka ${transfer.station}`} description={`Sprawdź przesiadkę ${train1.number} → ${train2.number} w ${transfer.station}. Aktualne opóźnienie: +${train1.delay} min. Monitor przesiadek PKP w czasie rzeczywistym.`}>
+<Base title="Demo — Monitoring przesiadek (w przygotowaniu)" description="Podgląd interfejsu monitoringu przesiadek. Pełna funkcjonalność będzie dostępna wkrótce. Dane przykładowe nie odzwierciedlają rzeczywistych opóźnień pociągów.">
+
+  <!-- Demo disclaimer -->
+  <section class="bg-delay-danger text-white">
+    <div class="max-w-4xl mx-auto px-4 py-3">
+      <div class="text-center">
+        <span class="font-ticket text-xs font-bold tracking-wider uppercase">⚠️ TRYB DEMONSTRACYJNY</span>
+        <p class="text-sm mt-1">To są dane przykładowe, nie rzeczywiste opóźnienia pociągów. Pełna funkcjonalność wkrótce.</p>
+      </div>
+    </div>
+  </section>
 
   <!-- Result header -->
   <section class="bg-surface-dark border-b border-border">
@@ -43,10 +55,10 @@ const bufferColor = transfer.currentBuffer > 20 ? 'green' : transfer.currentBuff
           <a href="/" class="text-ink-faint hover:text-white transition-colors text-sm">&larr; Nowa przesiadka</a>
         </div>
         <h1 class="text-xl md:text-2xl font-bold text-white mb-1">
-          {train1.number} &rarr; {train2.number}
+          {demoTrain1.number} &rarr; {demoTrain2.number} (DEMO)
         </h1>
         <p class="text-ink-faint text-sm">
-          {train1.from} &rarr; {train2.to} &middot; Przesiadka w {transfer.station}
+          {demoTrain1.from} &rarr; {demoTrain2.to} &middot; Przesiadka w {demoTransfer.station}
         </p>
         <p class="font-ticket text-[0.625rem] text-brand-300/60 uppercase tracking-widest mt-2">// wersja demo — dane przykładowe</p>
       </div>
@@ -62,16 +74,16 @@ const bufferColor = transfer.currentBuffer > 20 ? 'green' : transfer.currentBuff
         <div class="p-5">
           <div class="flex items-center justify-between mb-2">
             <div class="flex items-center gap-2.5">
-              <span class="text-sm font-bold text-ink">{train1.number}</span>
-              <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand-100 text-delay-warn">+{train1.delay} min</span>
+              <span class="text-sm font-bold text-ink">{demoTrain1.number}</span>
+              <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand-100 text-delay-warn">+{demoTrain1.delay} min</span>
             </div>
             <span class="text-xs text-ink-faint">Pociąg 1</span>
           </div>
-          <div class="text-sm text-ink-secondary mb-1">{train1.from} &rarr; {train1.to}</div>
+          <div class="text-sm text-ink-secondary mb-1">{demoTrain1.from} &rarr; {demoTrain1.to}</div>
           <div class="flex items-center gap-3 text-sm">
             <span class="text-ink-faint">Przyjazd:</span>
-            <span class="line-through text-ink-faint">{train1.scheduledArrival}</span>
-            <span class="font-semibold text-delay-warn">~{train1.estimatedArrival}</span>
+            <span class="line-through text-ink-faint">{demoTrain1.scheduledArrival}</span>
+            <span class="font-semibold text-delay-warn">~{demoTrain1.estimatedArrival}</span>
           </div>
         </div>
 
@@ -79,13 +91,13 @@ const bufferColor = transfer.currentBuffer > 20 ? 'green' : transfer.currentBuff
         <div class="px-5 py-4 bg-surface-sunken border-y border-border">
           <div class="flex items-center justify-between mb-2.5">
             <div class="text-sm text-ink-secondary">
-              Przesiadka w <span class="font-semibold text-ink">{transfer.station}</span>
+              Przesiadka w <span class="font-semibold text-ink">{demoTransfer.station}</span>
             </div>
             <div class="text-sm">
-              {bufferColor === 'green' && <span class="font-bold text-green-600">{transfer.currentBuffer} min</span>}
-              {bufferColor === 'amber' && <span class="font-bold text-delay-warn">{transfer.currentBuffer} min</span>}
-              {bufferColor === 'red' && <span class="font-bold text-red-600">{transfer.currentBuffer} min</span>}
-              <span class="text-ink-faint"> z {transfer.plannedBuffer} min</span>
+              {bufferColor === 'green' && <span class="font-bold text-green-600">{demoTransfer.currentBuffer} min</span>}
+              {bufferColor === 'amber' && <span class="font-bold text-delay-warn">{demoTransfer.currentBuffer} min</span>}
+              {bufferColor === 'red' && <span class="font-bold text-red-600">{demoTransfer.currentBuffer} min</span>}
+              <span class="text-ink-faint"> z {demoTransfer.plannedBuffer} min</span>
             </div>
           </div>
 
@@ -107,15 +119,15 @@ const bufferColor = transfer.currentBuffer > 20 ? 'green' : transfer.currentBuff
           </div>
 
           <!-- Warning message -->
-          {transfer.currentBuffer <= 15 && transfer.currentBuffer > 5 && (
+          {demoTransfer.currentBuffer <= 15 && demoTransfer.currentBuffer > 5 && (
             <div class="mt-3 flex items-start gap-2 p-2.5 bg-brand-50 border border-brand-200 rounded-lg">
               <span class="text-delay-warn text-base leading-none mt-0.5">&#9888;</span>
               <p class="text-xs text-delay-warn">
-                Bufor się zmniejsza. Jeśli opóźnienie wzrośnie do ~{transfer.plannedBuffer} min, nie zdążysz na przesiadkę.
+                Bufor się zmniejsza. Jeśli opóźnienie wzrośnie do ~{demoTransfer.plannedBuffer} min, nie zdążysz na przesiadkę.
               </p>
             </div>
           )}
-          {transfer.currentBuffer <= 5 && (
+          {demoTransfer.currentBuffer <= 5 && (
             <div class="mt-3 flex items-start gap-2 p-2.5 bg-red-50 border border-red-200 rounded-lg">
               <span class="text-red-500 text-base leading-none mt-0.5">&#9888;</span>
               <p class="text-xs text-red-700">
@@ -129,15 +141,15 @@ const bufferColor = transfer.currentBuffer > 20 ? 'green' : transfer.currentBuff
         <div class="p-5">
           <div class="flex items-center justify-between mb-2">
             <div class="flex items-center gap-2.5">
-              <span class="text-sm font-bold text-ink">{train2.number}</span>
+              <span class="text-sm font-bold text-ink">{demoTrain2.number}</span>
               <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">Punktualnie</span>
             </div>
             <span class="text-xs text-ink-faint">Pociąg 2</span>
           </div>
-          <div class="text-sm text-ink-secondary mb-1">{train2.from} &rarr; {train2.to}</div>
+          <div class="text-sm text-ink-secondary mb-1">{demoTrain2.from} &rarr; {demoTrain2.to}</div>
           <div class="flex items-center gap-3 text-sm">
             <span class="text-ink-faint">Odjazd:</span>
-            <span class="font-semibold text-ink">{train2.scheduledDeparture}</span>
+            <span class="font-semibold text-ink">{demoTrain2.scheduledDeparture}</span>
           </div>
         </div>
 
@@ -214,7 +226,7 @@ const bufferColor = transfer.currentBuffer > 20 ? 'green' : transfer.currentBuff
 
       <div class="grid grid-cols-2 gap-3">
         <div class="bg-surface-raised rounded-xl border border-border p-4">
-          <div class="text-xs text-ink-faint mb-1">Punktualność {train1.number}</div>
+          <div class="text-xs text-ink-faint mb-1">Punktualność {demoTrain1.number}</div>
           <div class="text-xl font-bold text-ink">64%</div>
           <div class="text-xs text-ink-faint mt-0.5">ostatnie 30 dni</div>
         </div>
@@ -229,7 +241,7 @@ const bufferColor = transfer.currentBuffer > 20 ? 'green' : transfer.currentBuff
           <div class="text-xs text-ink-faint mt-0.5">z buforem 30 min</div>
         </div>
         <div class="bg-surface-raised rounded-xl border border-border p-4">
-          <div class="text-xs text-ink-faint mb-1">Punktualność {train2.number}</div>
+          <div class="text-xs text-ink-faint mb-1">Punktualność {demoTrain2.number}</div>
           <div class="text-xl font-bold text-ink">89%</div>
           <div class="text-xs text-ink-faint mt-0.5">ostatnie 30 dni</div>
         </div>
@@ -245,7 +257,7 @@ const bufferColor = transfer.currentBuffer > 20 ? 'green' : transfer.currentBuff
   <section class="bg-surface-raised border-y border-border">
     <div class="max-w-4xl mx-auto px-4 py-10">
       <div class="max-w-lg mx-auto">
-        <h2 class="text-sm font-semibold text-ink-faint uppercase tracking-wider mb-5">Następne pociągi do {train2.to.split(' ')[0]}</h2>
+        <h2 class="text-sm font-semibold text-ink-faint uppercase tracking-wider mb-5">Następne pociągi do {demoTrain2.to.split(' ')[0]}</h2>
 
         <div class="space-y-2">
           <div class="flex items-center justify-between p-3 bg-surface-sunken rounded-lg border border-border">

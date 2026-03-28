@@ -40,27 +40,27 @@ const fmtMonth = (m: string) => {
   return names[parseInt(mo, 10) - 1] + ' ' + y.slice(2);
 };
 
-// Build chart data (live or mock)
+// Build chart data (live or empty - NO MOCK DATA)
 const trendMonths = hasLiveMonthly
   ? monthlyData!.monthlyTrend.map(t => fmtMonth(t.month))
-  : MOCK_MONTHLY_TREND.map(t => t.month);
+  : [];
 const trendValues = hasLiveMonthly
   ? monthlyData!.monthlyTrend.map(t => t.punctuality)
-  : MOCK_MONTHLY_TREND.map(t => t.punctuality);
+  : [];
 
 const operatorNames = hasLiveOperators
   ? monthlyData!.byOperator.map(o => o.carrier)
-  : MOCK_OPERATORS.map(o => o.carrier);
+  : [];
 const operatorValues = hasLiveOperators
   ? monthlyData!.byOperator.map(o => o.punctuality)
-  : MOCK_OPERATORS.map(o => o.punctuality);
+  : [];
 
 const categoryNames = hasLiveCategories
   ? monthlyData!.byCategory.map(c => c.category)
-  : MOCK_CATEGORIES.map(c => c.category);
+  : [];
 const categoryValues = hasLiveCategories
   ? monthlyData!.byCategory.map(c => c.punctuality)
-  : MOCK_CATEGORIES.map(c => c.punctuality);
+  : [];
 
 // Gauge: average punctuality
 const avgPunctuality = trendValues.length > 0
@@ -125,10 +125,21 @@ const usesLiveData = hasLiveMonthly || hasLiveOperators || hasLiveCategories;
       <div class="bg-surface-raised rounded-2xl border border-border p-5 md:p-7 flex flex-col items-center justify-center">
         <p class="section-label mb-1.5">// ogólna punktualność</p>
         <h2 class="text-lg font-bold text-ink tracking-tight mb-2">Punktualność sieci</h2>
-        <div id="overall-gauge" style="min-height: 240px; width: 100%;"></div>
-        <p class="font-ticket text-[0.625rem] text-ink-faint tracking-wider text-center mt-1">
-          Średnia z ostatnich 12 miesięcy
-        </p>
+        {avgPunctuality > 0 ? (
+          <Fragment>
+            <div id="overall-gauge" style="min-height: 240px; width: 100%;"></div>
+            <p class="font-ticket text-[0.625rem] text-ink-faint tracking-wider text-center mt-1">
+              Średnia z ostatnich 12 miesięcy
+            </p>
+          </Fragment>
+        ) : (
+          <div class="flex items-center justify-center" style="min-height: 240px;">
+            <div class="text-center">
+              <p class="font-ticket text-ink-faint text-sm">// brak danych</p>
+              <p class="text-ink-muted text-sm mt-2">Dane o punktualności będą dostępne po zebraniu wystarczających statystyk.</p>
+            </div>
+          </div>
+        )}
       </div>
 
       <!-- Key stats -->
@@ -155,7 +166,16 @@ const usesLiveData = hasLiveMonthly || hasLiveOperators || hasLiveCategories;
         </div>
         <span class="font-ticket text-[0.625rem] text-ink-faint tracking-wider uppercase">% pociągów na czas</span>
       </div>
-      <div id="monthly-line-chart" style="min-height: 300px;"></div>
+      {hasLiveMonthly ? (
+        <div id="monthly-line-chart" style="min-height: 300px;"></div>
+      ) : (
+        <div class="flex items-center justify-center" style="min-height: 300px;">
+          <div class="text-center">
+            <p class="font-ticket text-ink-faint text-sm">// brak danych</p>
+            <p class="text-ink-muted text-sm mt-2">Dane miesięczne będą dostępne po zebraniu wystarczających statystyk.</p>
+          </div>
+        </div>
+      )}
     </div>
   </section>
 
@@ -166,14 +186,32 @@ const usesLiveData = hasLiveMonthly || hasLiveOperators || hasLiveCategories;
       <div class="bg-surface-raised rounded-2xl border border-border p-5 md:p-7">
         <p class="section-label mb-1.5">// według przewoźnika</p>
         <h2 class="text-lg font-bold text-ink tracking-tight mb-6">Punktualność przewoźników</h2>
-        <div id="operator-bar-chart" style="min-height: 280px;"></div>
+        {hasLiveOperators ? (
+          <div id="operator-bar-chart" style="min-height: 280px;"></div>
+        ) : (
+          <div class="flex items-center justify-center" style="min-height: 280px;">
+            <div class="text-center">
+              <p class="font-ticket text-ink-faint text-sm">// brak danych</p>
+              <p class="text-ink-muted text-sm mt-2">Statystyki przewoźników będą dostępne wkrótce.</p>
+            </div>
+          </div>
+        )}
       </div>
 
       <!-- By category -->
       <div class="bg-surface-raised rounded-2xl border border-border p-5 md:p-7">
         <p class="section-label mb-1.5">// według kategorii</p>
         <h2 class="text-lg font-bold text-ink tracking-tight mb-6">Punktualność kategorii pociągów</h2>
-        <div id="category-bar-chart" style="min-height: 280px;"></div>
+        {hasLiveCategories ? (
+          <div id="category-bar-chart" style="min-height: 280px;"></div>
+        ) : (
+          <div class="flex items-center justify-center" style="min-height: 280px;">
+            <div class="text-center">
+              <p class="font-ticket text-ink-faint text-sm">// brak danych</p>
+              <p class="text-ink-muted text-sm mt-2">Statystyki kategorii będą dostępne wkrótce.</p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   </section>
@@ -344,7 +382,10 @@ const usesLiveData = hasLiveMonthly || hasLiveOperators || hasLiveCategories;
 
   const d = (window as any).__punktCharts;
   const punctuality = d.gaugeValue;
-  const gaugeColor = punctuality >= 80 ? '#16a34a' : punctuality >= 60 ? '#d97706' : '#dc2626';
+
+  // Only render if we have real data
+  if (punctuality > 0) {
+    const gaugeColor = punctuality >= 80 ? '#16a34a' : punctuality >= 60 ? '#d97706' : '#dc2626';
 
   const gaugeOptions: ApexCharts.ApexOptions = {
     chart: {
@@ -390,8 +431,9 @@ const usesLiveData = hasLiveMonthly || hasLiveOperators || hasLiveCategories;
     },
   };
 
-  const gaugeChart = new ApexCharts(document.querySelector('#overall-gauge'), gaugeOptions);
-  gaugeChart.render();
+    const gaugeChart = new ApexCharts(document.querySelector('#overall-gauge'), gaugeOptions);
+    gaugeChart.render();
+  }
 </script>
 
 <!-- Monthly punctuality line chart -->
@@ -401,6 +443,9 @@ const usesLiveData = hasLiveMonthly || hasLiveOperators || hasLiveCategories;
   const d = (window as any).__punktCharts;
   const months = d.lineMonths;
   const punctualityData = d.lineValues;
+
+  // Only render if we have real data
+  if (months.length > 0 && punctualityData.length > 0) {
 
   const lineOptions: ApexCharts.ApexOptions = {
     chart: {
@@ -472,7 +517,8 @@ const usesLiveData = hasLiveMonthly || hasLiveOperators || hasLiveCategories;
   };
 
   const lineChart = new ApexCharts(document.querySelector('#monthly-line-chart'), lineOptions);
-  lineChart.render();
+    lineChart.render();
+  }
 </script>
 
 <!-- Operator bar chart -->
@@ -482,6 +528,9 @@ const usesLiveData = hasLiveMonthly || hasLiveOperators || hasLiveCategories;
   const d = (window as any).__punktCharts;
   const operators = d.opNames;
   const operatorPunctuality = d.opValues;
+
+  // Only render if we have real data
+  if (operators.length > 0 && operatorPunctuality.length > 0) {
 
   const operatorColors = operatorPunctuality.map((val: number) =>
     val >= 80 ? '#16a34a' : val >= 70 ? '#d97706' : '#dc2626'
@@ -542,8 +591,9 @@ const usesLiveData = hasLiveMonthly || hasLiveOperators || hasLiveCategories;
     },
   };
 
-  const operatorChart = new ApexCharts(document.querySelector('#operator-bar-chart'), operatorOptions);
-  operatorChart.render();
+    const operatorChart = new ApexCharts(document.querySelector('#operator-bar-chart'), operatorOptions);
+    operatorChart.render();
+  }
 </script>
 
 <!-- Category bar chart -->
@@ -553,6 +603,9 @@ const usesLiveData = hasLiveMonthly || hasLiveOperators || hasLiveCategories;
   const d = (window as any).__punktCharts;
   const categories = d.catNames;
   const categoryPunctuality = d.catValues;
+
+  // Only render if we have real data
+  if (categories.length > 0 && categoryPunctuality.length > 0) {
 
   const categoryColors = categoryPunctuality.map((val: number) =>
     val >= 80 ? '#16a34a' : val >= 70 ? '#d97706' : '#dc2626'
@@ -614,5 +667,6 @@ const usesLiveData = hasLiveMonthly || hasLiveOperators || hasLiveCategories;
   };
 
   const categoryChart = new ApexCharts(document.querySelector('#category-bar-chart'), categoryOptions);
-  categoryChart.render();
+    categoryChart.render();
+  }
 </script>

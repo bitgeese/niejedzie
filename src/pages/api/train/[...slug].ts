@@ -100,7 +100,7 @@ export const GET: APIRoute = async ({ params }) => {
       );
 
       if (match) {
-        const stations = buildStationList(match.stations);
+        const stations = buildStationList(match.stations, date);
         const response: TrainResponse = { train: trainInfo, stations };
 
         return new Response(JSON.stringify(response), {
@@ -158,6 +158,10 @@ export const GET: APIRoute = async ({ params }) => {
       const hasActual = r.actual_arrival !== null || r.actual_departure !== null;
       const isConfirmed = r.is_confirmed === 1;
 
+      // CRITICAL FIX: Only mark as "passed" if actual time is in the past
+      const actualTimeInPast = hasActual && isConfirmed &&
+        isActualTimeInPast(r.actual_arrival as string | null, r.actual_departure as string | null, date);
+
       return {
         name: (r.station_name as string) || '',
         plannedArr: r.planned_arrival as string | null,
@@ -165,7 +169,7 @@ export const GET: APIRoute = async ({ params }) => {
         plannedDep: r.planned_departure as string | null,
         actualDep: r.actual_departure as string | null,
         delay,
-        passed: hasActual && isConfirmed,
+        passed: actualTimeInPast,
         current: false,
       };
     });
@@ -206,10 +210,15 @@ function buildStationList(
     departureDelayMinutes: number | null;
     isConfirmed: boolean;
   }>,
+  operatingDate: string,
 ): StationDetail[] {
   const result: StationDetail[] = stations.map((s) => {
     const delay = Math.max(s.arrivalDelayMinutes ?? 0, s.departureDelayMinutes ?? 0);
     const hasActual = s.actualArrival !== null || s.actualDeparture !== null;
+
+    // CRITICAL FIX: Only mark as "passed" if actual time is in the past
+    const actualTimeInPast = hasActual && s.isConfirmed &&
+      isActualTimeInPast(s.actualArrival, s.actualDeparture, operatingDate);
 
     return {
       name: s.stationName,
@@ -218,7 +227,7 @@ function buildStationList(
       plannedDep: s.plannedDeparture,
       actualDep: s.actualDeparture,
       delay,
-      passed: hasActual && s.isConfirmed,
+      passed: actualTimeInPast,
       current: false,
     };
   });
@@ -230,4 +239,48 @@ function buildStationList(
   }
 
   return result;
+}
+
+/**
+ * Checks if actual arrival/departure time is in the past compared to current Poland time.
+ * Critical for preventing trains from showing as "passed" when they're actually in the future.
+ */
+function isActualTimeInPast(actualArr: string | null, actualDep: string | null, operatingDate: string): boolean {
+  // Get the latest actual time (departure usually happens after arrival)
+  const actualTime = actualDep || actualArr;
+  if (!actualTime) return false;
+
+  try {
+    // Current time in Poland
+    const now = new Date();
+    const polandTime = new Date(now.toLocaleString("en-US", {timeZone: "Europe/Warsaw"}));
+    const currentHour = polandTime.getHours();
+    const currentMinute = polandTime.getMinutes();
+
+    // Parse actual time (format: "HH:MM" or "HH:MM:SS")
+    const [hourStr, minuteStr] = actualTime.split(':');
+    const actualHour = parseInt(hourStr, 10);
+    const actualMinute = parseInt(minuteStr, 10);
+
+    // Check if operating date is today
+    const todayStr = [
+      polandTime.getFullYear(),
+      String(polandTime.getMonth() + 1).padStart(2, '0'),
+      String(polandTime.getDate()).padStart(2, '0'),
+    ].join('-');
+
+    if (operatingDate !== todayStr) {
+      // If data is from a different date, assume it's in the past
+      return operatingDate < todayStr;
+    }
+
+    // Same day: compare times
+    const actualTotalMinutes = actualHour * 60 + actualMinute;
+    const currentTotalMinutes = currentHour * 60 + currentMinute;
+
+    return actualTotalMinutes < currentTotalMinutes;
+  } catch (error) {
+    console.warn(`[train/detail] Time validation error for ${actualTime}:`, error);
+    return false; // Safer to assume not passed if time parsing fails
+  }
 }
