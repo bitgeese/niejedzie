@@ -81,8 +81,8 @@ const DELAYS_TAB_URL = `${PORTAL_BASE}/Opoznienia/Index`;
 const SESSION_KV_KEY = 'scraper:session';
 const SESSION_TTL = 600; // 10 minutes
 const PAGE_FETCH_DELAY_MS = 500;
-const DETAIL_FETCH_DELAY_MS = 500;
-const MAX_DETAIL_PAGES_PER_CYCLE = 10;
+const DETAIL_FETCH_DELAY_MS = 400;  // Slightly faster for more coverage
+const MAX_DETAIL_PAGES_PER_CYCLE = 15;  // Increased from 10 to 15 for better coverage
 const USER_AGENT = 'niejedzie.pl/1.0 (train delay tracker; contact@niejedzie.pl)';
 
 // ---------------------------------------------------------------------------
@@ -1288,6 +1288,7 @@ async function transformToApiFormat(
 	const now = new Date().toISOString();
 
 	const transformedTrains: ApiTrain[] = [];
+	let skippedCount = 0;
 
 	for (const train of scraped) {
 		const fullTrainNumber = train.carrier
@@ -1310,30 +1311,12 @@ async function transformToApiFormat(
 			console.log(`[transform] Using detailed data for ${trainKey}: ${detailStations.length} stations`);
 			stations = detailStations;
 		} else {
-			console.log(`[transform] Using fallback for ${trainKey}: no detailed data (detailStations=${detailStations?.length || 0})`);
-			// Fall back to a single station entry from the list view summary
-			// Clean the station name using Claude AI before fallback
-			let stationName = train.routeTo || 'Nieznana';
-
-			if (train.routeTo && train.routeTo.trim() !== '') {
-				const cleanResult = await cleanStationName(train.routeTo, env);
-				stationName = cleanResult.cleanName;
-			}
-
-			const station: ApiStation = {
-				stationId: hashCode(train.routeTo || 'unknown'),
-				stationName,
-				sequenceNumber: 1,
-				plannedArrival: null,      // PHASE 1 FIX: Don't use current time as fallback
-				plannedDeparture: null,
-				actualArrival: null,
-				actualDeparture: null,
-				arrivalDelayMinutes: null, // PHASE 1 FIX: Don't use train.delayMinutes without time context
-				departureDelayMinutes: null,
-				isConfirmed: false,        // PHASE 1 FIX: Mark as unconfirmed since no real time data
-				isCancelled: false,
-			};
-			stations = [station];
+			console.log(`[transform] Skipping ${trainKey}: no detailed station data available`);
+			// STATION NAME MAPPING BUG FIX: Don't create misleading fallback stations
+			// When detail page scraping fails, skip this train entirely rather than
+			// creating fake single-station entries with just the destination name
+			skippedCount++;
+			continue;
 		}
 
 		// NEW: Auto-populate route start/end from station data when missing
@@ -1366,6 +1349,8 @@ async function transformToApiFormat(
 
 		transformedTrains.push(apiTrain);
 	}
+
+	console.log(`[transform] Processed ${scraped.length} trains: ${transformedTrains.length} with station data, ${skippedCount} skipped (no detail data)`);
 
 	return transformedTrains;
 }
@@ -1500,10 +1485,35 @@ export async function fetchFromScraper(env: Env): Promise<ApiTrain[] | null> {
 		// Clean station names using Claude AI
 		const cleanedDetailMap = await cleanStationNamesInDetailMap(detailMap, env);
 
-		const trains = await transformToApiFormat(scraped, cleanedDetailMap, env);
+		let trains = await transformToApiFormat(scraped, cleanedDetailMap, env);
 		console.log(`[scraper] Transformed ${trains.length} trains to API format (${cleanedDetailMap.size} with station details)`);
 
-		return trains;
+		// PHASE 4 FIX: Complete incomplete routes (missing destinations)
+		const routeCompletionResults = [];
+		const completedTrains = [];
+
+		for (const train of trains) {
+			const isIncomplete = detectIncompleteRoute(train);
+
+			if (isIncomplete) {
+				const { completedTrain, completionResult } = await completeIncompleteRoute(train, env);
+				completedTrains.push(completedTrain);
+				routeCompletionResults.push({
+					trainNumber: train.trainNumber,
+					...completionResult
+				});
+
+				console.log(`[route-completion] Fixed incomplete route for ${train.trainNumber}: added [${completionResult.addedStations.join(', ')}] (confidence: ${completionResult.confidence})`);
+			} else {
+				completedTrains.push(train);
+			}
+		}
+
+		if (routeCompletionResults.length > 0) {
+			console.log(`[route-completion] Completed ${routeCompletionResults.length} incomplete routes`);
+		}
+
+		return completedTrains;
 	} catch (err) {
 		console.error(`[scraper] Fatal error: ${err}`);
 		return null;
@@ -1628,4 +1638,135 @@ async function debugDetailPage(detailUrl: string, session: ScrapingSession): Pro
 	}
 
 	console.log(`[DEBUG] === End Diagnostic Test ===`);
+}
+
+// ---------------------------------------------------------------------------
+// Route Completion Functions
+// ---------------------------------------------------------------------------
+
+/**
+ * Detect if a train route is incomplete (missing destination or intermediate stations)
+ */
+function detectIncompleteRoute(trainData: ApiTrain): boolean {
+	const { routeEnd } = trainData;
+	const { stations } = trainData;
+
+	if (!routeEnd || !stations || stations.length === 0) {
+		return false;
+	}
+
+	// Check if destination station exists in the station list
+	const hasDestination = stations.some((station) =>
+		station.stationName?.includes(routeEnd) ||
+		station.stationName === routeEnd
+	);
+
+	if (!hasDestination) {
+		console.warn(`[route-completion] Missing destination: ${routeEnd} not found in stations`);
+		return true;
+	}
+
+	// Check if route seems suspiciously short (< 5 stations for long-distance trains)
+	if (stations.length < 5 && isLongDistanceRoute(trainData.routeStart, routeEnd)) {
+		console.warn(`[route-completion] Suspiciously short route: ${stations.length} stations for ${trainData.routeStart} → ${routeEnd}`);
+		return true;
+	}
+
+	return false;
+}
+
+/**
+ * Complete an incomplete route by adding missing destination station
+ */
+async function completeIncompleteRoute(
+	trainData: ApiTrain,
+	env?: Env
+): Promise<{ completedTrain: ApiTrain; completionResult: any }> {
+
+	const completionResult = {
+		wasIncomplete: false,
+		addedStations: [],
+		completionMethod: 'fallback',
+		confidence: 0
+	};
+
+	if (!detectIncompleteRoute(trainData)) {
+		return { completedTrain: trainData, completionResult };
+	}
+
+	completionResult.wasIncomplete = true;
+	const completedStations = [...trainData.stations];
+
+	// Add missing destination station if not present
+	if (!trainData.stations.some((s) => s.stationName === trainData.routeEnd)) {
+		const destinationStation = createEstimatedDestinationStation(trainData);
+		completedStations.push(destinationStation);
+		completionResult.addedStations.push(trainData.routeEnd);
+		completionResult.completionMethod = 'estimated';
+		completionResult.confidence = 0.7;
+
+		console.log(`[route-completion] Added missing destination: ${trainData.routeEnd}`);
+	}
+
+	const completedTrain = {
+		...trainData,
+		stations: completedStations.sort((a, b) => a.sequenceNumber - b.sequenceNumber)
+	};
+
+	return { completedTrain, completionResult };
+}
+
+/**
+ * Create an estimated destination station based on route information
+ */
+function createEstimatedDestinationStation(trainData: ApiTrain): ApiStation {
+	const lastStation = trainData.stations[trainData.stations.length - 1];
+
+	// Estimate timing based on last known station
+	let estimatedArrival: string | null = null;
+	let estimatedDelay: number | null = null;
+
+	if (lastStation?.plannedArrival && lastStation?.arrivalDelayMinutes !== null) {
+		// Estimate 30 minutes travel time from last station to destination
+		const lastPlannedTime = new Date(lastStation.plannedArrival);
+		const estimatedPlannedTime = new Date(lastPlannedTime.getTime() + (30 * 60 * 1000));
+
+		estimatedArrival = estimatedPlannedTime.toISOString();
+		estimatedDelay = lastStation.arrivalDelayMinutes; // Assume similar delay
+	}
+
+	return {
+		stationId: hashCode(trainData.routeEnd),
+		stationName: trainData.routeEnd,
+		sequenceNumber: trainData.stations.length + 1,
+		plannedArrival: estimatedArrival,
+		plannedDeparture: null,
+		actualArrival: null,
+		actualDeparture: null,
+		arrivalDelayMinutes: estimatedDelay,
+		departureDelayMinutes: null,
+		isConfirmed: false,
+		isCancelled: false
+	};
+}
+
+/**
+ * Check if this appears to be a long-distance route
+ */
+function isLongDistanceRoute(routeStart: string | null, routeEnd: string | null): boolean {
+	if (!routeStart || !routeEnd) return false;
+
+	// Known long-distance route patterns
+	const longDistancePatterns = [
+		['Częstochowa', 'Katowice'],
+		['Warszawa', 'Kraków'],
+		['Gdańsk', 'Warszawa'],
+		['Poznań', 'Wrocław'],
+		['Szczecin', 'Warszawa']
+	];
+
+	return longDistancePatterns.some(([start, end]) =>
+		(routeStart.includes(start) && routeEnd.includes(end)) ||
+		(routeStart.includes(end) && routeEnd.includes(start))
+	);
 }
