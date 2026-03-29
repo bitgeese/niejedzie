@@ -14,6 +14,9 @@ on:
         type: boolean
         default: false
 
+permissions:
+  issues: write
+
 jobs:
   auto-heal:
     runs-on: ubuntu-latest
