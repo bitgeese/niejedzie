@@ -39,7 +39,7 @@ export const GET: APIRoute = async () => {
       SELECT COUNT(*) as suspicious_count
       FROM delay_snapshots
       WHERE operating_date = ?
-        AND (planned_arrival LIKE '%T00:00:00' OR actual_arrival LIKE '%T00:00:00')
+        AND (planned_arrival = '00:00' OR actual_arrival = '00:00')
         AND (planned_departure IS NOT NULL OR actual_departure IS NOT NULL)
     `).bind(today).first();
 

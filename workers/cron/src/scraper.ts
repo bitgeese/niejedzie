@@ -715,16 +715,13 @@ function calculateDelayMinutes(actualMinutes: number | null, plannedMinutes: num
 }
 
 /**
- * Convert an HH:MM time string into a full ISO datetime string for today.
- * Returns null if the input is not a valid time.
+ * Validate and normalize an HH:MM time string. Pads hours to 2 digits.
+ * Returns "HH:MM" or null if invalid.
  */
-function timeToIsoString(timeStr: string): string | null {
+function normalizeTime(timeStr: string): string | null {
 	const match = timeStr.trim().match(/^(\d{1,2}):(\d{2})$/);
 	if (!match) return null;
-	const today = new Date().toISOString().split('T')[0];
-	const hours = match[1].padStart(2, '0');
-	const minutes = match[2];
-	return `${today}T${hours}:${minutes}:00`;
+	return `${match[1].padStart(2, '0')}:${match[2]}`;
 }
 
 /**
@@ -924,8 +921,8 @@ function parseTrainDetailPage(html: string): ApiStation[] | null {
 		if (isFirst && times.length >= 2) {
 			// Origin station: departure only
 			// times[0] = planned departure, times[1] = actual departure
-			plannedDeparture = timeToIsoString(times[0]);
-			actualDeparture = timeToIsoString(times[1]);
+			plannedDeparture = normalizeTime(times[0]);
+			actualDeparture = normalizeTime(times[1]);
 			departureDelayMinutes = calculateDelayMinutes(
 				parseTimeToMinutes(times[1]),
 				parseTimeToMinutes(times[0]),
@@ -933,7 +930,7 @@ function parseTrainDetailPage(html: string): ApiStation[] | null {
 		} else if (isLast && times.length >= 2) {
 			// Terminus: arrival only
 			// times[0] = planned arrival, times[1] = actual arrival
-			plannedArrival = timeToIsoString(times[0]);
+			plannedArrival = normalizeTime(times[0]);
 
 			// CRITICAL FIX: Validate actual time to detect 00:00:00 artifacts
 			const actualTime = times[1];
@@ -946,14 +943,14 @@ function parseTrainDetailPage(html: string): ApiStation[] | null {
 					actualArrival = null;
 					arrivalDelayMinutes = null;
 				} else {
-					actualArrival = timeToIsoString(actualTime);
+					actualArrival = normalizeTime(actualTime);
 					arrivalDelayMinutes = calculateDelayMinutes(
 						parseTimeToMinutes(actualTime),
 						parseTimeToMinutes(plannedTime),
 					);
 				}
 			} else {
-				actualArrival = timeToIsoString(actualTime);
+				actualArrival = normalizeTime(actualTime);
 				arrivalDelayMinutes = calculateDelayMinutes(
 					parseTimeToMinutes(actualTime),
 					parseTimeToMinutes(plannedTime),
@@ -963,8 +960,8 @@ function parseTrainDetailPage(html: string): ApiStation[] | null {
 			// Intermediate station: arrival + departure
 			// times[0] = planned arrival, times[1] = planned departure
 			// times[2] = actual arrival, times[3] = actual departure
-			plannedArrival = timeToIsoString(times[0]);
-			plannedDeparture = timeToIsoString(times[1]);
+			plannedArrival = normalizeTime(times[0]);
+			plannedDeparture = normalizeTime(times[1]);
 
 			// CRITICAL FIX: Validate actual times to detect 00:00:00 artifacts
 			const actualArrTime = times[2];
@@ -980,14 +977,14 @@ function parseTrainDetailPage(html: string): ApiStation[] | null {
 					actualArrival = null;
 					arrivalDelayMinutes = null;
 				} else {
-					actualArrival = timeToIsoString(actualArrTime);
+					actualArrival = normalizeTime(actualArrTime);
 					arrivalDelayMinutes = calculateDelayMinutes(
 						parseTimeToMinutes(actualArrTime),
 						parseTimeToMinutes(plannedArrTime),
 					);
 				}
 			} else {
-				actualArrival = timeToIsoString(actualArrTime);
+				actualArrival = normalizeTime(actualArrTime);
 				arrivalDelayMinutes = calculateDelayMinutes(
 					parseTimeToMinutes(actualArrTime),
 					parseTimeToMinutes(plannedArrTime),
@@ -1002,14 +999,14 @@ function parseTrainDetailPage(html: string): ApiStation[] | null {
 					actualDeparture = null;
 					departureDelayMinutes = null;
 				} else {
-					actualDeparture = timeToIsoString(actualDepTime);
+					actualDeparture = normalizeTime(actualDepTime);
 					departureDelayMinutes = calculateDelayMinutes(
 						parseTimeToMinutes(actualDepTime),
 						parseTimeToMinutes(plannedDepTime),
 					);
 				}
 			} else {
-				actualDeparture = timeToIsoString(actualDepTime);
+				actualDeparture = normalizeTime(actualDepTime);
 				departureDelayMinutes = calculateDelayMinutes(
 					parseTimeToMinutes(actualDepTime),
 					parseTimeToMinutes(plannedDepTime),
@@ -1017,7 +1014,7 @@ function parseTrainDetailPage(html: string): ApiStation[] | null {
 			}
 		} else if (times.length >= 2) {
 			// Fallback: treat as arrival only if we can't determine position
-			plannedArrival = timeToIsoString(times[0]);
+			plannedArrival = normalizeTime(times[0]);
 
 			// CRITICAL FIX: Validate actual time to detect 00:00:00 artifacts
 			const actualTime = times[1];
@@ -1029,14 +1026,14 @@ function parseTrainDetailPage(html: string): ApiStation[] | null {
 					actualArrival = null;
 					arrivalDelayMinutes = null;
 				} else {
-					actualArrival = timeToIsoString(actualTime);
+					actualArrival = normalizeTime(actualTime);
 					arrivalDelayMinutes = calculateDelayMinutes(
 						parseTimeToMinutes(actualTime),
 						parseTimeToMinutes(plannedTime),
 					);
 				}
 			} else {
-				actualArrival = timeToIsoString(actualTime);
+				actualArrival = normalizeTime(actualTime);
 				arrivalDelayMinutes = calculateDelayMinutes(
 					parseTimeToMinutes(actualTime),
 					parseTimeToMinutes(plannedTime),

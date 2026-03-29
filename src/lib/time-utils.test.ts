@@ -131,7 +131,7 @@ describe('isActualTimeInPast', () => {
 
   it('handles ISO format from database (THE critical bug scenario)', () => {
     // This is exactly the data format that caused the bug:
-    // timeToIsoString("14:30") → "2026-03-28T14:30:00"
+    // Scraper now stores HH:MM directly, but old data may still be ISO
     expect(isActualTimeInPast(
       '2026-03-28T09:00:00',  // arrival
       '2026-03-28T09:05:00',  // departure

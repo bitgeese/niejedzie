@@ -2,7 +2,7 @@
  * Time parsing and comparison utilities for Polish train delay tracking.
  *
  * Database stores times in ISO format ("2026-03-28T14:30:00") via the scraper's
- * timeToIsoString(). These functions normalize all formats before comparison.
+ * The scraper stores times as HH:MM. These functions handle comparison.
  */
 
 /**
