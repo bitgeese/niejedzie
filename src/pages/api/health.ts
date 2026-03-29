@@ -92,30 +92,22 @@ export const GET: APIRoute = async ({ request }) => {
       health.issues.push('Stripe configuration error');
     }
 
-    // Data quality checks
+    // Data quality check — null rate only (detailed checks in /api/quality)
     try {
       const qualityChecks = await env.DB.prepare(`
         SELECT
           COUNT(*) as total_stations,
           SUM(CASE WHEN planned_arrival IS NULL AND planned_departure IS NULL
-                   AND actual_arrival IS NULL AND actual_departure IS NULL THEN 1 ELSE 0 END) as null_stations,
-          SUM(CASE WHEN actual_arrival LIKE '%T00:00:00%'
-                   AND planned_arrival NOT LIKE '%T00:00:00%' THEN 1 ELSE 0 END) as suspicious_midnight
+                   AND actual_arrival IS NULL AND actual_departure IS NULL THEN 1 ELSE 0 END) as null_stations
         FROM delay_snapshots
         WHERE operating_date = ?
       `).bind(new Date().toISOString().split('T')[0]).first();
 
-      if (qualityChecks) {
+      if (qualityChecks && qualityChecks.total_stations > 0) {
         const nullPercent = (qualityChecks.null_stations / qualityChecks.total_stations) * 100;
-        const midnightPercent = (qualityChecks.suspicious_midnight / qualityChecks.total_stations) * 100;
 
         if (nullPercent > 20) {
           health.issues.push(`High null data rate: ${nullPercent.toFixed(1)}%`);
-          health.status = 'degraded';
-        }
-
-        if (midnightPercent > 5) {
-          health.issues.push(`Suspicious midnight times: ${midnightPercent.toFixed(1)}%`);
           health.status = 'degraded';
         }
       }
