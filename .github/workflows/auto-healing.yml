@@ -165,7 +165,7 @@ jobs:
             ${healingActions || 'No specific actions identified'}
 
             ### Auto-healing Status:
-            ${{ steps.deploy_healing.outputs.deployment_triggered == 'true' ? '✅ Auto-healing deployment triggered' : '⏸️ No deployment needed' }}
+            ${{ steps.deploy_healing.outputs.deployment_triggered == 'true' && '✅ Auto-healing deployment triggered' || '⏸️ No deployment needed' }}
 
             ### Next Steps:
             1. Auto-healing algorithms will process identified issues
