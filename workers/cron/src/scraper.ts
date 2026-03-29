@@ -42,6 +42,8 @@ interface ApiStation {
 	departureDelayMinutes: number | null;
 	isConfirmed: boolean;
 	isCancelled: boolean;
+	arrivalConfidence: 'confirmed' | 'estimated' | 'planned';
+	departureConfidence: 'confirmed' | 'estimated' | 'planned';
 }
 
 interface ApiTrain {
@@ -1052,6 +1054,7 @@ function parseTrainDetailPage(html: string): ApiStation[] | null {
 		const hasWarn = /color--warn/i.test(block);
 		const isCancelled = /odwo[lł]an/i.test(block);
 
+		const hasStatusClass = hasAlert || hasWarn;
 		stations.push({
 			stationId: hashCode(stationName),
 			stationName,
@@ -1062,8 +1065,10 @@ function parseTrainDetailPage(html: string): ApiStation[] | null {
 			actualDeparture,
 			arrivalDelayMinutes,
 			departureDelayMinutes,
-			isConfirmed: hasAlert || hasWarn || (actualArrival !== null || actualDeparture !== null),
+			isConfirmed: hasStatusClass || (actualArrival !== null || actualDeparture !== null),
 			isCancelled,
+			arrivalConfidence: actualArrival ? (hasStatusClass ? 'confirmed' : 'estimated') : 'planned',
+			departureConfidence: actualDeparture ? (hasStatusClass ? 'confirmed' : 'estimated') : 'planned',
 		});
 	}
 

@@ -123,7 +123,8 @@ export const GET: APIRoute = async ({ url }) => {
       const oid = row.order_id as number;
       const result = await env.DB.prepare(`
         SELECT station_name, planned_arrival, planned_departure, actual_arrival, actual_departure,
-               arrival_delay, departure_delay, sequence_num, is_confirmed, is_cancelled, recorded_at
+               arrival_delay, departure_delay, sequence_num, is_confirmed, is_cancelled, recorded_at,
+               arrival_confidence, departure_confidence
         FROM delay_snapshots
         WHERE schedule_id = ? AND order_id = ? AND operating_date = ?
         ORDER BY sequence_num ASC, recorded_at DESC
@@ -187,12 +188,19 @@ export const GET: APIRoute = async ({ url }) => {
       const arrDelay = (r.arrival_delay as number) || 0;
       const depDelay = (r.departure_delay as number) || 0;
       const delay = Math.max(arrDelay, depDelay);
+      const arrConfidence = (r.arrival_confidence as string) || 'planned';
+      const depConfidence = (r.departure_confidence as string) || 'planned';
+      const hasConfirmed = arrConfidence === 'confirmed' || depConfidence === 'confirmed';
       const hasActual = r.actual_arrival !== null || r.actual_departure !== null;
-      const isConfirmed = r.is_confirmed === 1;
 
-      // Primary: use confirmed actual times
-      let passed = hasActual && isConfirmed &&
+      // Primary: use confirmed actual times (CSS class + actual time + in past)
+      let passed = hasConfirmed &&
         isActualTimeInPast(r.actual_arrival as string | null, r.actual_departure as string | null, operatingDate);
+
+      // Secondary: use estimated actual times (actual time present but no CSS class)
+      if (!passed && hasActual && !hasConfirmed) {
+        passed = isActualTimeInPast(r.actual_arrival as string | null, r.actual_departure as string | null, operatingDate);
+      }
 
       // Fallback: use planned time when no actual data available
       if (!passed && !hasActual) {

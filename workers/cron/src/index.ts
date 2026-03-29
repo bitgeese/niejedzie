@@ -568,8 +568,9 @@ async function pollOperations(env: Env): Promise<void> {
 		INSERT OR REPLACE INTO delay_snapshots
 			(schedule_id, order_id, operating_date, station_id, station_name,
 			 sequence_num, planned_arrival, planned_departure, actual_arrival,
-			 actual_departure, arrival_delay, departure_delay, is_confirmed, is_cancelled)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			 actual_departure, arrival_delay, departure_delay, is_confirmed, is_cancelled,
+			 arrival_confidence, departure_confidence)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`);
 
 	// Validate stations before DB insertion
@@ -613,6 +614,8 @@ async function pollOperations(env: Env): Promise<void> {
 					st.departureDelayMinutes,
 					st.isConfirmed ? 1 : 0,
 					st.isCancelled ? 1 : 0,
+					st.arrivalConfidence ?? 'planned',
+					st.departureConfidence ?? 'planned',
 				),
 			);
 		}
