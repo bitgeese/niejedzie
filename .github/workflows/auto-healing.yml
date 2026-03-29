@@ -154,7 +154,7 @@ jobs:
             ## Auto-healing Analysis Report
 
             **Time**: ${new Date().toISOString()}
-            **Status**: ${{ steps.quality_check.outputs.status === 'degraded' ? '⚠️ Issues Detected' : '✅ Preventive Analysis' }}
+            **Status**: ${{ steps.quality_check.outputs.status == 'degraded' && '⚠️ Issues Detected' || '✅ Preventive Analysis' }}
 
             ### Issues Summary:
             - **Total auto-healing opportunities**: ${issuesFound}
