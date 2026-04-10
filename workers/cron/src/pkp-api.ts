@@ -148,7 +148,7 @@ export async function fetchAllOperations(
   const allTrains: TrainOperationDto[] = [];
   let allStations: Record<string, string> = {};
   let page = 1;
-  const pageSize = 10000;
+  const pageSize = 1000;
 
   while (true) {
     const res = await pkpFetch<OperationsResponse>(
@@ -174,6 +174,12 @@ export async function fetchAllOperations(
 
     if (!res.pagination.hasNextPage) break;
     page++;
+
+    // Safety: cap at 50 pages to avoid runaway loops
+    if (page > 50) {
+      console.warn(`[fetchAllOperations] Stopped at page ${page} (safety cap)`);
+      break;
+    }
   }
 
   console.log(`[fetchAllOperations] Fetched ${allTrains.length} trains across ${page} pages`);
@@ -199,7 +205,7 @@ export async function fetchAllSchedules(
   let allStations: Record<string, string> = {};
   let allCarriers: Record<string, string> = {};
   let page = 1;
-  const pageSize = 10000;
+  const pageSize = 1000;
 
   while (true) {
     const res = await pkpFetch<SchedulesResponse>(

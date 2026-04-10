@@ -1415,6 +1415,30 @@ export default {
 			return Response.json({ triggered: "pollOperations" });
 		}
 
+		// Synchronous debug — single page test
+		if (url.pathname === "/__trigger/debug-poll") {
+			try {
+				const size = url.searchParams.get('size') || '5';
+				const apiUrl = `${PKP_API_BASE}/api/v1/operations?pageSize=${size}&page=1&fullRoutes=true&withPlanned=true`;
+				const apiRes = await fetch(apiUrl, {
+					headers: { "X-API-Key": env.PKP_API_KEY, "Accept": "application/json" },
+				});
+				if (!apiRes.ok) {
+					return Response.json({ error: `HTTP ${apiRes.status}`, body: (await apiRes.text()).slice(0, 500) });
+				}
+				const result = await apiRes.json() as any;
+				return Response.json({
+					trainCount: result.trains?.length ?? 0,
+					pagination: result.pagination,
+					stationDictSize: result.stations ? Object.keys(result.stations).length : 0,
+					sampleTrainKeys: result.trains?.[0] ? Object.keys(result.trains[0]) : [],
+					topLevelKeys: Object.keys(result),
+				});
+			} catch (err) {
+				return Response.json({ error: String(err), stack: (err as Error).stack }, { status: 500 });
+			}
+		}
+
 		if (url.pathname === "/__trigger/disruptions") {
 			ctx.waitUntil(pollDisruptions(env));
 			return Response.json({ triggered: "pollDisruptions" });
