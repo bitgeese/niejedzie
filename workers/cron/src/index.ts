@@ -1,13 +1,20 @@
 // niejedzie-cron — Cloudflare Worker cron for polling PKP PLK API
 //
 // Cron schedules:
-//   every 2 min   — pollOperations (current train delays -> D1 + KV)
+//   every 5 min   — pollOperations (current train delays -> D1 + KV)
 //   every 5 min   — pollDisruptions (active disruptions -> D1 + KV)
-//   0 2 * * *     — aggregateDaily (yesterday's stats -> D1, prune old data)
+//   0 2 * * *     — syncDaily (schedules + stations + aggregation + pruning)
 
-import { fetchFromScraper, scrapePortalStats, type PortalStats } from './scraper';
-import { fetchGtfsRtStats, type GtfsRtStats } from './gtfs-rt';
-import { loadStations } from './gtfs-static';
+import {
+	fetchAllOperations,
+	fetchStatistics,
+	fetchAllSchedules,
+	fetchDisruptions as fetchDisruptionsApi,
+	type TrainOperationDto,
+	type OperationStationDto,
+	type RouteDto,
+	type DisruptionDto,
+} from './pkp-api';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -17,76 +24,7 @@ interface Env {
 	DB: D1Database;
 	DELAYS_KV: KVNamespace;
 	PKP_API_KEY: string;
-	DATA_SOURCE?: string; // 'api' | 'scraper' | 'auto'
 	ANTHROPIC_API_KEY?: string;
-}
-
-/** Shape of a single station entry returned by /operations */
-interface ApiStation {
-	stationId: number;
-	stationName: string;
-	sequenceNumber: number;
-	plannedArrival: string | null;
-	plannedDeparture: string | null;
-	actualArrival: string | null;
-	actualDeparture: string | null;
-	arrivalDelayMinutes: number | null;
-	departureDelayMinutes: number | null;
-	isConfirmed: boolean;
-	isCancelled: boolean;
-}
-
-/** Shape of a single train entry returned by /operations */
-interface ApiTrain {
-	scheduleId: number;
-	orderId: number;
-	trainNumber?: string;
-	carrier?: string;
-	category?: string;
-	routeStartStation?: string;
-	routeEndStation?: string;
-	stations: ApiStation[];
-}
-
-/** Top-level /operations response */
-interface OperationsResponse {
-	success: boolean;
-	data: {
-		trains: ApiTrain[];
-		totalCount?: number;
-		pageNumber?: number;
-		pageSize?: number;
-		totalPages?: number;
-	};
-}
-
-/** Single disruption from /disruptions */
-interface ApiDisruption {
-	disruptionId: number;
-	disruptionTypeCode: string;
-	startStation: string;
-	endStation: string;
-	message: string;
-}
-
-/** Top-level /disruptions response */
-interface DisruptionsResponse {
-	success: boolean;
-	data: {
-		disruptions: ApiDisruption[];
-	};
-}
-
-/** Schedule route metadata response */
-interface ScheduleRouteResponse {
-	success: boolean;
-	data: {
-		trainNumber: string;
-		carrier: string;
-		category: string;
-		routeStartStation: string;
-		routeEndStation: string;
-	};
 }
 
 /** Monitoring session row from D1 */
@@ -101,22 +39,6 @@ interface MonitoringSession {
 	operating_date: string;
 	status: string;
 	last_checked: string | null;
-}
-
-/** KV stats shape */
-interface TodayStats {
-	timestamp: string;
-	totalTrains: number;
-	avgDelay: number;
-	punctualityPct: number;
-	cancelledCount: number;
-	onTimeCount: number;
-	/** Total trains from GTFS-RT feed (all target agencies). Null if feed unavailable. */
-	gtfsRtTotalTrains: number | null;
-	/** Per-agency train counts from GTFS-RT feed. Null if feed unavailable. */
-	gtfsRtByAgency: Record<string, number> | null;
-	/** Punctuality corrected using GTFS-RT denominator: (gtfsTotal - delayed) / gtfsTotal */
-	correctedPunctualityPct: number | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -140,154 +62,17 @@ const MAJOR_CITIES = [
 // Helpers
 // ---------------------------------------------------------------------------
 
-function todayDateStr(): string {
-	return new Date().toISOString().split("T")[0];
+export function todayDateStr(): string {
+	const now = new Date();
+	const pt = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Warsaw' }));
+	return [pt.getFullYear(), String(pt.getMonth() + 1).padStart(2, '0'), String(pt.getDate()).padStart(2, '0')].join('-');
 }
 
 function yesterdayDateStr(): string {
-	return new Date(Date.now() - 86_400_000).toISOString().split("T")[0];
-}
-
-// ---------------------------------------------------------------------------
-// Enhanced Multi-Source Data Fusion
-// ---------------------------------------------------------------------------
-
-interface ScraperData {
-	totalTrains: number;
-	onTimeCount: number;
-	cancelledCount: number;
-	avgDelay: number;
-}
-
-interface DataFusionResult {
-	bestPunctuality: number;
-	bestTotalTrains: number;
-	correctedPunctuality: number | null;
-	confidence: 'high' | 'medium' | 'low';
-	primarySource: 'portal' | 'gtfs-rt' | 'scraper';
-	validationIssues: string[];
-}
-
-/**
- * Enhanced data fusion with cross-validation and confidence scoring
- */
-function computeEnhancedDataFusion({
-	scraperData,
-	gtfsRtStats,
-	portalStats
-}: {
-	scraperData: ScraperData;
-	gtfsRtStats: GtfsRtStats | null;
-	portalStats: PortalStats | null;
-}): DataFusionResult {
-	const validationIssues: string[] = [];
-	let bestPunctuality = scraperData.totalTrains > 0
-		? Math.round((scraperData.onTimeCount / scraperData.totalTrains) * 100)
-		: 0;
-	let bestTotalTrains = scraperData.totalTrains;
-	let correctedPunctuality: number | null = null;
-	let confidence: 'high' | 'medium' | 'low' = 'low';
-	let primarySource: 'portal' | 'gtfs-rt' | 'scraper' = 'scraper';
-
-	// 1. Portal Pasażera real punctuality (most accurate for punctuality %)
-	if (portalStats?.onRoute !== null && portalStats.onRoute !== undefined) {
-		bestPunctuality = Math.round(portalStats.onRoute * 10) / 10;
-		confidence = 'high';
-		primarySource = 'portal';
-		console.log(`[fusion] Using Portal Pasażera punctuality: ${bestPunctuality}%`);
-	}
-
-	// 2. GTFS-RT total train count (most accurate for universe size)
-	if (gtfsRtStats && gtfsRtStats.totalTrains > 0) {
-		bestTotalTrains = gtfsRtStats.totalTrains;
-
-		// Cross-validate train counts
-		const scraperRatio = scraperData.totalTrains / gtfsRtStats.totalTrains;
-		if (scraperRatio > 0.5) {
-			validationIssues.push(`High scraper ratio: ${(scraperRatio * 100).toFixed(1)}% of trains are delayed`);
-		}
-
-		// Compute GTFS-RT corrected punctuality if portal data unavailable
-		if (primarySource !== 'portal') {
-			const delayedTrains = scraperData.totalTrains - scraperData.onTimeCount - scraperData.cancelledCount;
-			const correctedOnTime = gtfsRtStats.totalTrains - delayedTrains - scraperData.cancelledCount;
-			correctedPunctuality = Math.round((correctedOnTime / gtfsRtStats.totalTrains) * 1000) / 10;
-
-			bestPunctuality = correctedPunctuality;
-			confidence = confidence === 'high' ? 'high' : 'medium';
-			primarySource = 'gtfs-rt';
-
-			console.log(`[fusion] GTFS-RT corrected punctuality: ${correctedPunctuality}% (${correctedOnTime}/${gtfsRtStats.totalTrains})`);
-		}
-	}
-
-	// 3. Data validation and quality checks
-	if (portalStats && gtfsRtStats) {
-		// Cross-validate punctuality between sources
-		const portalPunctuality = portalStats.onRoute || 0;
-		const gtfsEstimate = correctedPunctuality || 0;
-		const punctualityDiff = Math.abs(portalPunctuality - gtfsEstimate);
-
-		if (punctualityDiff > 20) {
-			validationIssues.push(`Large punctuality difference: Portal=${portalPunctuality}%, GTFS-RT=${gtfsEstimate}%`);
-			confidence = 'low';
-		}
-	}
-
-	// 4. Confidence scoring based on data availability
-	if (portalStats && gtfsRtStats && validationIssues.length === 0) {
-		confidence = 'high';
-	} else if ((portalStats || gtfsRtStats) && validationIssues.length <= 1) {
-		confidence = 'medium';
-	} else {
-		confidence = 'low';
-	}
-
-	// 5. Final validation
-	if (bestTotalTrains < scraperData.totalTrains) {
-		validationIssues.push(`Total trains (${bestTotalTrains}) less than delayed trains (${scraperData.totalTrains})`);
-		bestTotalTrains = scraperData.totalTrains;
-		confidence = 'low';
-	}
-
-	return {
-		bestPunctuality,
-		bestTotalTrains,
-		correctedPunctuality,
-		confidence,
-		primarySource,
-		validationIssues
-	};
-}
-
-/** Typed fetch wrapper for PKP PLK API with error handling */
-async function pkpFetch<T>(
-	path: string,
-	apiKey: string,
-	params?: Record<string, string>,
-): Promise<T | null> {
-	const url = new URL(path, PKP_API_BASE);
-	if (params) {
-		for (const [k, v] of Object.entries(params)) {
-			url.searchParams.set(k, v);
-		}
-	}
-
-	const res = await fetch(url.toString(), {
-		headers: {
-			"X-API-Key": apiKey,
-			Accept: "application/json",
-		},
-	});
-
-	if (!res.ok) {
-		console.error(
-			`PKP API error: ${res.status} ${res.statusText} for ${url.pathname}`,
-		);
-		return null;
-	}
-
-	return res.json() as Promise<T>;
+	const now = new Date();
+	const pt = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Warsaw' }));
+	pt.setDate(pt.getDate() - 1);
+	return [pt.getFullYear(), String(pt.getMonth() + 1).padStart(2, '0'), String(pt.getDate()).padStart(2, '0')].join('-');
 }
 
 /**
@@ -308,99 +93,71 @@ async function batchExecute(
 }
 
 // ---------------------------------------------------------------------------
-// pollOperations — runs every 2 minutes
+// Delay computation helpers
+// ---------------------------------------------------------------------------
+
+function computeDelay(st: OperationStationDto, operatingDate: string): number {
+	if (!st.plannedArrival || !st.actualArrival) return 0;
+	const planned = new Date(`${operatingDate}T${st.plannedArrival}`);
+	const actual = new Date(st.actualArrival);
+	return Math.round((actual.getTime() - planned.getTime()) / 60000);
+}
+
+function computeDelayDeparture(st: OperationStationDto, operatingDate: string): number {
+	if (!st.plannedDeparture || !st.actualDeparture) return 0;
+	const planned = new Date(`${operatingDate}T${st.plannedDeparture}`);
+	const actual = new Date(st.actualDeparture);
+	return Math.round((actual.getTime() - planned.getTime()) / 60000);
+}
+
+// ---------------------------------------------------------------------------
+// pollOperations — runs every 5 minutes
 // ---------------------------------------------------------------------------
 
 async function pollOperations(env: Env): Promise<void> {
 	const today = todayDateStr();
-	const source = env.DATA_SOURCE || 'auto';
-	console.log(`[pollOperations] Starting poll for ${today} (source: ${source})`);
+	console.log(`[pollOperations] Starting poll for ${today}`);
 
-	// 1. Fetch all current operations (handle pagination)
-	let allTrains: ApiTrain[] = [];
-
-	// Try official API first (if key available and not forced to scraper)
-	if (source !== 'scraper' && env.PKP_API_KEY) {
-		let page = 1;
-		const pageSize = 500;
-
-		while (true) {
-			const res = await pkpFetch<OperationsResponse>(
-				"/api/v1/operations",
-				env.PKP_API_KEY,
-				{
-					fullRoutes: "true",
-					withPlanned: "true",
-					pageNumber: String(page),
-					pageSize: String(pageSize),
-				},
-			);
-
-			if (!res || !res.success || !res.data?.trains?.length) {
-				if (page === 1) {
-					console.warn("[pollOperations] No data from API on first page");
-				}
-				break;
-			}
-
-			allTrains = allTrains.concat(res.data.trains);
-
-			// Check if there are more pages
-			const totalPages = res.data.totalPages ?? 1;
-			if (page >= totalPages) break;
-			page++;
-		}
-
-		if (allTrains.length > 0) {
-			console.log(`[pollOperations] Fetched ${allTrains.length} trains from API`);
-		}
-	}
-
-	// Fall back to scraper (if API failed/empty or forced to scraper)
-	if (allTrains.length === 0 && source !== 'api') {
-		console.log('[pollOperations] Using Portal Pasażera scraper');
-		try {
-			const scraped = await fetchFromScraper(env);
-			if (scraped && scraped.length > 0) {
-				allTrains = scraped;
-				console.log(`[pollOperations] Fetched ${allTrains.length} trains from scraper`);
-			}
-		} catch (err) {
-			console.error(`[pollOperations] Scraper failed: ${err}`);
-		}
-	}
+	// 1. Fetch all current operations from PKP API
+	const { trains: allTrains, stations: stationDict } = await fetchAllOperations(env.PKP_API_KEY);
 
 	if (allTrains.length === 0) {
-		console.warn('[pollOperations] No data from any source');
+		console.log('[pollOperations] No trains from API — skipping');
 		return;
 	}
 
-	console.log(`[pollOperations] Processing ${allTrains.length} trains total`);
+	console.log(`[pollOperations] Processing ${allTrains.length} trains`);
 
-	// 2. Write latest snapshot to KV (hot cache for frontend)
-	await env.DELAYS_KV.put(
-		"operations:latest",
-		JSON.stringify({
-			timestamp: new Date().toISOString(),
-			trainCount: allTrains.length,
-			trains: allTrains,
-		}),
-		{ expirationTtl: 180 },
-	);
-
-	// 3. Fetch GTFS-RT stats + Portal stats in parallel with stats computation
-	//    GTFS-RT gives us the real total train count across all operators.
-	//    Portal stats (s=1) gives us the REAL punctuality percentages.
-	const gtfsRtPromise = fetchGtfsRtStats(env).catch((err) => {
-		console.error(`[pollOperations] GTFS-RT fetch failed: ${err}`);
-		return null as GtfsRtStats | null;
-	});
-	const portalStatsPromise = scrapePortalStats().catch((err) => {
-		console.error(`[pollOperations] Portal stats fetch failed: ${err}`);
-		return null as PortalStats | null;
+	// 2. Fetch official statistics in parallel
+	const pkpStats = await fetchStatistics(env.PKP_API_KEY, today).catch((err) => {
+		console.warn(`[pollOperations] PKP stats failed: ${err}`);
+		return null;
 	});
 
-	// 4. Compute summary stats from scraped/API delay data
+	// 3. Load train metadata from trains table for identity mapping
+	const trainMetaRows = await env.DB.prepare(
+		`SELECT schedule_id, order_id, train_number, carrier, category, route_start, route_end FROM trains`
+	).all();
+
+	const trainMeta = new Map<string, {
+		train_number: string;
+		carrier: string | null;
+		category: string | null;
+		route_start: string | null;
+		route_end: string | null;
+	}>();
+	for (const row of trainMetaRows.results) {
+		const key = `${row.schedule_id}-${row.order_id}`;
+		trainMeta.set(key, {
+			train_number: row.train_number as string,
+			carrier: row.carrier as string | null,
+			category: row.category as string | null,
+			route_start: row.route_start as string | null,
+			route_end: row.route_end as string | null,
+		});
+	}
+
+	// 4. Compute summary stats
 	let totalDelay = 0;
 	let delayCount = 0;
 	let onTimeCount = 0;
@@ -412,22 +169,23 @@ async function pollOperations(env: Env): Promise<void> {
 		if (trainIds.has(trainKey)) continue;
 		trainIds.add(trainKey);
 
-		// Use the last station with actual data to determine train-level stats
 		let trainMaxDelay = 0;
 		let trainCancelled = false;
 
 		for (const st of train.stations) {
-			const delay = st.arrivalDelayMinutes ?? st.departureDelayMinutes ?? 0;
-			if (delay > trainMaxDelay) trainMaxDelay = delay;
+			const arrDelay = computeDelay(st, train.operatingDate);
+			const depDelay = computeDelayDeparture(st, train.operatingDate);
+			const delay = st.arrivalDelayMinutes ?? arrDelay;
+			if (Math.abs(delay) > Math.abs(trainMaxDelay)) trainMaxDelay = delay;
 			if (st.isCancelled) trainCancelled = true;
 
-			if (st.arrivalDelayMinutes !== null || st.departureDelayMinutes !== null) {
+			if (st.actualArrival || st.actualDeparture) {
 				totalDelay += delay;
 				delayCount++;
 			}
 		}
 
-		if (trainCancelled) {
+		if (trainCancelled || train.trainStatus === 'Cancelled') {
 			cancelledCount++;
 		} else if (trainMaxDelay <= 5) {
 			onTimeCount++;
@@ -441,58 +199,80 @@ async function pollOperations(env: Env): Promise<void> {
 			? Math.round((onTimeCount / totalTrains) * 1000) / 10
 			: 0;
 
-	// 5. Await GTFS-RT stats + Portal stats and compute corrected punctuality
-	const gtfsRtStats = await gtfsRtPromise;
-	const portalStats = await portalStatsPromise;
+	// 5. Upsert active_trains
+	const activeTrainStmt = env.DB.prepare(`
+		INSERT OR REPLACE INTO active_trains
+			(operating_date, train_number, train_number_numeric, carrier, agency_id,
+			 trip_id, stop_count, is_delayed, max_delay, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+	`);
 
-	// Enhanced data fusion with validation and confidence scoring
-	const fusionResult = computeEnhancedDataFusion({
-		scraperData: {
-			totalTrains,
-			onTimeCount,
-			cancelledCount,
-			avgDelay
-		},
-		gtfsRtStats,
-		portalStats
-	});
+	const activeTrainBatch: D1PreparedStatement[] = [];
+	for (const train of allTrains) {
+		const key = `${train.scheduleId}-${train.orderId}`;
+		if (activeTrainBatch.length >= allTrains.length) break; // dedupe handled by OR REPLACE
+		const meta = trainMeta.get(key);
+		const trainNumber = meta?.train_number ?? `${train.scheduleId}`;
+		const numericMatch = trainNumber.match(/\d+/);
+		const trainNumberNumeric = numericMatch ? numericMatch[0] : '';
+		const carrier = meta?.carrier ?? '';
 
-	// Log fusion results and validation issues
-	console.log(
-		`[pollOperations] Data Fusion — Primary: ${fusionResult.primarySource}, ` +
-		`Confidence: ${fusionResult.confidence}, ` +
-		`Trains: ${fusionResult.bestTotalTrains}, ` +
-		`Punctuality: ${fusionResult.bestPunctuality}%`
-	);
+		let maxDelay = 0;
+		let isDelayed = false;
+		for (const st of train.stations) {
+			const delay = st.arrivalDelayMinutes ?? computeDelay(st, train.operatingDate);
+			if (delay > maxDelay) maxDelay = delay;
+			if (delay > 5) isDelayed = true;
+		}
 
-	if (fusionResult.validationIssues.length > 0) {
-		console.warn(`[pollOperations] Data validation issues: ${fusionResult.validationIssues.join('; ')}`);
+		activeTrainBatch.push(
+			activeTrainStmt.bind(
+				train.operatingDate || today,
+				trainNumber,
+				trainNumberNumeric,
+				carrier,
+				'', // agency_id not available from PKP API
+				`${train.scheduleId}-${train.orderId}`, // trip_id placeholder
+				train.stations.length,
+				isDelayed ? 1 : 0,
+				maxDelay,
+			),
+		);
 	}
 
-	// Build topDelayed from scraped trains (sorted by max delay descending, top 10)
+	if (activeTrainBatch.length > 0) {
+		await batchExecute(env.DB, activeTrainBatch).catch((err) => {
+			console.error(`[pollOperations] Active trains upsert failed: ${err}`);
+		});
+		console.log(`[pollOperations] Upserted ${activeTrainBatch.length} active trains`);
+	}
+
+	// 6. Build topDelayed list using metadata lookup
 	const topDelayed = allTrains
 		.map((t) => {
+			const key = `${t.scheduleId}-${t.orderId}`;
+			const meta = trainMeta.get(key);
 			const maxDelay = Math.max(
 				0,
 				...t.stations.map(
-					(s) => s.arrivalDelayMinutes ?? s.departureDelayMinutes ?? 0,
+					(s) => s.arrivalDelayMinutes ?? computeDelay(s, t.operatingDate),
 				),
 			);
+			const lastStation = t.stations[t.stations.length - 1];
+			const firstStation = t.stations[0];
 			return {
-				trainNumber:
-					t.trainNumber || `${t.carrier ?? ''} ${t.scheduleId}`.trim(),
+				trainNumber: meta?.train_number ?? `${t.scheduleId}`,
 				delay: maxDelay,
-				route: `${t.routeStartStation ?? '?'} → ${t.routeEndStation ?? '?'}`,
-				station:
-					t.stations[t.stations.length - 1]?.stationName ?? '',
-				carrier: t.carrier ?? '',
+				route: `${meta?.route_start ?? stationDict[String(firstStation?.stationId)] ?? '?'} → ${meta?.route_end ?? stationDict[String(lastStation?.stationId)] ?? '?'}`,
+				station: stationDict[String(lastStation?.stationId)] ?? '',
+				carrier: meta?.carrier ?? '',
 			};
 		})
 		.filter((t) => t.delay > 0)
 		.sort((a, b) => b.delay - a.delay)
 		.slice(0, 10);
 
-	// Fetch active disruptions from KV for inclusion in stats:today
+	// 7. Fetch active disruptions from KV for inclusion in stats:today
 	let disruptions: Array<{ message: string; route: string }> = [];
 	try {
 		const disruptionsRaw = await env.DELAYS_KV.get(
@@ -509,7 +289,7 @@ async function pollOperations(env: Env): Promise<void> {
 		console.error(`[pollOperations] Failed to fetch disruptions from KV: ${err}`);
 	}
 
-	// Compute hourly delay breakdown from D1
+	// 8. Compute hourly delay breakdown from D1
 	let hourlyDelays: Array<{ hour: string; avgDelay: number }> = [];
 	try {
 		const hourlyRows = await env.DB.prepare(`
@@ -530,92 +310,103 @@ async function pollOperations(env: Env): Promise<void> {
 		console.warn(`[pollOperations] Failed to compute hourly delays: ${err}`);
 	}
 
-	// Write the full response shape that /api/delays/today expects
+	// 9. Compute accumulated daily punctuality from all delay_snapshots today
+	let dailyPunctuality: number | null = null;
+	let dailyAvgDelay: number | null = null;
+	try {
+		const dailyRow = await env.DB.prepare(`
+			SELECT
+				COUNT(*) AS total_trains,
+				SUM(CASE WHEN max_delay <= 5 THEN 1 ELSE 0 END) AS on_time,
+				ROUND(AVG(CASE WHEN max_delay > 0 THEN max_delay ELSE 0 END), 1) AS avg_delay
+			FROM (
+				SELECT schedule_id, order_id,
+					MAX(COALESCE(arrival_delay, departure_delay, 0)) AS max_delay
+				FROM delay_snapshots
+				WHERE operating_date = ?
+				GROUP BY schedule_id, order_id
+			)
+		`).bind(today).first();
+		const total = (dailyRow?.total_trains as number) || 0;
+		const onTime = (dailyRow?.on_time as number) || 0;
+		if (total > 0) {
+			dailyPunctuality = Math.round((onTime / total) * 1000) / 10;
+			dailyAvgDelay = (dailyRow?.avg_delay as number) || 0;
+		}
+	} catch (err) {
+		console.warn(`[pollOperations] Failed to compute daily punctuality: ${err}`);
+	}
+
+	// 10. Write stats:today to KV
 	const todayStats = {
 		timestamp: new Date().toISOString(),
-		totalTrains: fusionResult.bestTotalTrains,
-		avgDelay,
-		punctualityPct: fusionResult.bestPunctuality,
-		cancelledCount,
+		totalTrains: pkpStats?.totalTrains ?? totalTrains,
+		avgDelay: dailyAvgDelay ?? avgDelay,
+		punctualityPct: dailyPunctuality ?? punctualityPct,
+		cancelledCount: pkpStats?.cancelled ?? cancelledCount,
 		onTimeCount,
-		gtfsRtTotalTrains: gtfsRtStats?.totalTrains ?? null,
-		gtfsRtByAgency: gtfsRtStats?.byAgency ?? null,
-		correctedPunctualityPct: fusionResult.correctedPunctuality,
-		portalPunctualityOnRoute: portalStats?.onRoute ?? null,
-		portalPunctualityDeparted: portalStats?.departed ?? null,
-		portalPunctualityCompleted: portalStats?.completed ?? null,
-		portalTrainsStartedPct: portalStats?.startedPct ?? null,
-		dataFusionConfidence: fusionResult.confidence,
-		dataFusionPrimarySource: fusionResult.primarySource,
-		dataValidationIssues: fusionResult.validationIssues,
+		pkpOfficialStats: pkpStats ? {
+			totalTrains: pkpStats.totalTrains,
+			completed: pkpStats.completed,
+			inProgress: pkpStats.inProgress,
+			notStarted: pkpStats.notStarted,
+			cancelled: pkpStats.cancelled,
+			partialCancelled: pkpStats.partialCancelled,
+		} : null,
+		dailyPunctuality,
+		dailyAvgDelay,
 		topDelayed,
 		disruptions,
 		hourlyDelays,
 	};
 
 	await env.DELAYS_KV.put("stats:today", JSON.stringify(todayStats), {
-		expirationTtl: 180,
+		expirationTtl: 600,
 	});
 
 	console.log(
-		`[pollOperations] Final Stats — trains: ${fusionResult.bestTotalTrains}, onTime: ${onTimeCount}, ` +
-			`avgDelay: ${avgDelay}min, cancelled: ${cancelledCount}, ` +
-			`punctuality: ${fusionResult.bestPunctuality}% (${fusionResult.primarySource}, ${fusionResult.confidence} confidence)`
+		`[pollOperations] Stats — trains: ${todayStats.totalTrains}, onTime: ${onTimeCount}, ` +
+			`avgDelay: ${avgDelay}min, cancelled: ${cancelledCount}, punctuality: ${todayStats.punctualityPct}%`
 	);
 
-	// 6. Batch INSERT OR REPLACE into delay_snapshots
+	// 11. Batch INSERT OR REPLACE into delay_snapshots
 	const insertStmt = env.DB.prepare(`
 		INSERT OR REPLACE INTO delay_snapshots
 			(schedule_id, order_id, operating_date, station_id, station_name,
 			 sequence_num, planned_arrival, planned_departure, actual_arrival,
-			 actual_departure, arrival_delay, departure_delay, is_confirmed, is_cancelled,
-			 arrival_confidence, departure_confidence)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+			 actual_departure, arrival_delay, departure_delay, is_confirmed, is_cancelled)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`);
 
-	// Validate stations before DB insertion
-	const validatedTrains = allTrains.map(train => {
-		const validStations = train.stations.filter(st => {
+	const batch: D1PreparedStatement[] = [];
+	for (const train of allTrains) {
+		for (const st of train.stations) {
+			const stationName = stationDict[String(st.stationId)] ?? '';
 			// Skip stations with no name
-			if (!st.stationName || st.stationName.trim() === '') {
-				return false;
-			}
-
+			if (!stationName || stationName.trim() === '') continue;
 			// Skip stations with no time data at all
 			if (!st.plannedArrival && !st.plannedDeparture &&
-				!st.actualArrival && !st.actualDeparture) {
-				return false;
-			}
+				!st.actualArrival && !st.actualDeparture) continue;
 
-			return true;
-		});
+			const arrDelay = st.arrivalDelayMinutes ?? computeDelay(st, train.operatingDate);
+			const depDelay = st.departureDelayMinutes ?? computeDelayDeparture(st, train.operatingDate);
 
-		return { ...train, stations: validStations };
-	}).filter(train => train.stations.length > 0);
-
-	console.log(`[validation] ${allTrains.length} trains → ${validatedTrains.length} after filtering (removed empty names/times)`);
-
-	const batch: D1PreparedStatement[] = [];
-	for (const train of validatedTrains) {
-		for (const st of train.stations) {
 			batch.push(
 				insertStmt.bind(
 					train.scheduleId,
 					train.orderId,
-					today,
+					train.operatingDate || today,
 					st.stationId,
-					st.stationName,
-					st.sequenceNumber,
+					stationName,
+					st.actualSequenceNumber ?? st.plannedSequenceNumber ?? 0,
 					st.plannedArrival,
 					st.plannedDeparture,
 					st.actualArrival,
 					st.actualDeparture,
-					st.arrivalDelayMinutes,
-					st.departureDelayMinutes,
+					arrDelay,
+					depDelay,
 					st.isConfirmed ? 1 : 0,
 					st.isCancelled ? 1 : 0,
-					st.arrivalConfidence ?? 'planned',
-					st.departureConfidence ?? 'planned',
 				),
 			);
 		}
@@ -624,13 +415,20 @@ async function pollOperations(env: Env): Promise<void> {
 	const inserted = await batchExecute(env.DB, batch);
 	console.log(`[pollOperations] Wrote ${inserted} station snapshots to D1`);
 
-	// 7. Backfill train metadata for any new schedule_id/order_id combos
-	await backfillTrainMetadata(env, allTrains, today);
+	// 12. Write operations:latest to KV
+	await env.DELAYS_KV.put(
+		"operations:latest",
+		JSON.stringify({
+			timestamp: new Date().toISOString(),
+			trainCount: allTrains.length,
+		}),
+		{ expirationTtl: 600 },
+	);
 
-	// 8. Check active monitoring sessions
-	await checkMonitoringSessions(env, allTrains);
+	// 13. Check active monitoring sessions
+	await checkMonitoringSessions(env, allTrains, stationDict);
 
-	// 9. Run data quality check every 10 minutes (5 polls)
+	// 14. Run data quality check every 10 minutes
 	const currentMinute = new Date().getMinutes();
 	if (currentMinute % 10 === 0) {
 		await reportDataQualityIssues(env).catch((err) => {
@@ -640,121 +438,119 @@ async function pollOperations(env: Env): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// backfillTrainMetadata — fetch /schedules for unknown trains
+// syncDaily — runs at 02:00
 // ---------------------------------------------------------------------------
 
-async function backfillTrainMetadata(
-	env: Env,
-	trains: ApiTrain[],
-	today: string,
-): Promise<void> {
-	// Deduplicate by schedule_id + order_id
-	const uniqueTrains = new Map<string, ApiTrain>();
-	for (const t of trains) {
-		const key = `${t.scheduleId}-${t.orderId}`;
-		if (!uniqueTrains.has(key)) {
-			uniqueTrains.set(key, t);
-		}
-	}
+async function syncDaily(env: Env): Promise<void> {
+	const today = todayDateStr();
+	console.log(`[syncDaily] Starting daily sync for ${today}`);
 
-	// Check which ones we already have in the trains table
-	// Query in batches to avoid huge IN clauses
-	const keys = Array.from(uniqueTrains.keys());
-	const existingKeys = new Set<string>();
+	// 1. Fetch all schedules for today (train identity)
+	const { routes, stations: stationDict, carriers } = await fetchAllSchedules(env.PKP_API_KEY, today);
+	console.log(`[syncDaily] Fetched ${routes.length} routes, ${Object.keys(stationDict).length} stations`);
 
-	for (let i = 0; i < keys.length; i += 50) {
-		const chunk = keys.slice(i, i + 50);
-		const placeholders = chunk.map(() => "(?, ?)").join(", ");
-		const binds: (number | string)[] = [];
-		for (const k of chunk) {
-			const [sid, oid] = k.split("-");
-			binds.push(Number(sid), Number(oid));
-		}
-
-		const result = await env.DB.prepare(
-			`SELECT schedule_id || '-' || order_id AS k FROM trains WHERE (schedule_id, order_id) IN (${placeholders})`,
-		)
-			.bind(...binds)
-			.all();
-
-		for (const row of result.results) {
-			existingKeys.add(row.k as string);
-		}
-	}
-
-	// Fetch metadata for missing trains
-	const missing = keys.filter((k) => !existingKeys.has(k));
-	if (missing.length === 0) return;
-
-	console.log(
-		`[backfillTrainMetadata] Fetching metadata for ${missing.length} new trains`,
-	);
-
-	const upsertStmt = env.DB.prepare(`
+	// 2. Upsert trains table with schedule data
+	const trainUpsertStmt = env.DB.prepare(`
 		INSERT OR REPLACE INTO trains
 			(schedule_id, order_id, train_number, carrier, category, route_start, route_end, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
 	`);
 
-	const stmts: D1PreparedStatement[] = [];
+	const trainStmts: D1PreparedStatement[] = [];
+	for (const route of routes) {
+		const trainNumber = route.nationalNumber ?? route.name ?? `${route.scheduleId}`;
+		const carrier = route.carrierCode ?? '';
+		const category = route.commercialCategorySymbol ?? '';
 
-	// Limit to 20 per poll cycle to stay within rate limits
-	const toFetch = missing.slice(0, 20);
+		// Determine route start/end from station names
+		const firstStation = route.stations[0];
+		const lastStation = route.stations[route.stations.length - 1];
+		const routeStart = firstStation ? (stationDict[String(firstStation.stationId)] ?? '') : '';
+		const routeEnd = lastStation ? (stationDict[String(lastStation.stationId)] ?? '') : '';
 
-	for (const key of toFetch) {
-		const train = uniqueTrains.get(key)!;
-
-		// If the operations response already contains train metadata, use it directly
-		if (train.trainNumber) {
-			stmts.push(
-				upsertStmt.bind(
-					train.scheduleId,
-					train.orderId,
-					train.trainNumber,
-					train.carrier ?? null,
-					train.category ?? null,
-					train.routeStartStation ?? null,
-					train.routeEndStation ?? null,
-				),
-			);
-			continue;
-		}
-
-		// Otherwise, fetch from /schedules endpoint
-		try {
-			const meta = await pkpFetch<ScheduleRouteResponse>(
-				`/api/v1/schedules/route/${train.scheduleId}/${train.orderId}`,
-				env.PKP_API_KEY,
-				{ date: today },
-			);
-
-			if (meta?.success && meta.data) {
-				stmts.push(
-					upsertStmt.bind(
-						train.scheduleId,
-						train.orderId,
-						meta.data.trainNumber ?? "unknown",
-						meta.data.carrier ?? null,
-						meta.data.category ?? null,
-						meta.data.routeStartStation ?? null,
-						meta.data.routeEndStation ?? null,
-					),
-				);
-			}
-		} catch (err) {
-			console.error(
-				`[backfillTrainMetadata] Failed for ${key}: ${err}`,
-			);
-			// Don't let one failure crash the batch
-		}
-	}
-
-	if (stmts.length > 0) {
-		await batchExecute(env.DB, stmts);
-		console.log(
-			`[backfillTrainMetadata] Upserted ${stmts.length} train records`,
+		trainStmts.push(
+			trainUpsertStmt.bind(
+				route.scheduleId,
+				route.orderId,
+				trainNumber,
+				carrier,
+				category,
+				routeStart,
+				routeEnd,
+			),
 		);
 	}
+
+	if (trainStmts.length > 0) {
+		const upserted = await batchExecute(env.DB, trainStmts);
+		console.log(`[syncDaily] Upserted ${upserted} train records`);
+	}
+
+	// 3. Upsert train_routes from schedule station data
+	const routeStmt = env.DB.prepare(`
+		INSERT OR REPLACE INTO train_routes
+			(operating_date, train_number, stop_sequence, stop_id, arrival_time, departure_time, trip_id)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
+	`);
+
+	const routeStmts: D1PreparedStatement[] = [];
+	for (const route of routes) {
+		const trainNumber = route.nationalNumber ?? route.name ?? `${route.scheduleId}`;
+		const tripId = `${route.scheduleId}-${route.orderId}`;
+
+		for (const st of route.stations) {
+			routeStmts.push(
+				routeStmt.bind(
+					today,
+					trainNumber,
+					st.orderNumber,
+					st.stationId,
+					st.arrivalTime ?? null,
+					st.departureTime ?? null,
+					tripId,
+				),
+			);
+		}
+	}
+
+	if (routeStmts.length > 0) {
+		const upserted = await batchExecute(env.DB, routeStmts);
+		console.log(`[syncDaily] Upserted ${upserted} train route stops`);
+	}
+
+	// 4. Update stations table from dictionary
+	const stationStmt = env.DB.prepare(`
+		INSERT OR REPLACE INTO stations (station_id, name, city)
+		VALUES (?, ?, ?)
+	`);
+
+	const stationStmts: D1PreparedStatement[] = [];
+	for (const [idStr, name] of Object.entries(stationDict)) {
+		const stationId = Number(idStr);
+		if (isNaN(stationId)) continue;
+
+		// Extract city from station name (e.g., "Warszawa Centralna" → "Warszawa")
+		const city = name.split(/\s+/)[0] ?? name;
+
+		stationStmts.push(
+			stationStmt.bind(stationId, name, city),
+		);
+	}
+
+	if (stationStmts.length > 0) {
+		const upserted = await batchExecute(env.DB, stationStmts);
+		console.log(`[syncDaily] Upserted ${upserted} stations`);
+	}
+
+	// 5. Run existing aggregation and backfill
+	await aggregateDaily(env).catch((err) =>
+		console.error(`[syncDaily] aggregateDaily failed: ${err}`),
+	);
+	await backfillCityDaily(env).catch((err) =>
+		console.error(`[syncDaily] backfillCityDaily failed: ${err}`),
+	);
+
+	console.log('[syncDaily] Daily sync completed');
 }
 
 // ---------------------------------------------------------------------------
@@ -764,17 +560,12 @@ async function backfillTrainMetadata(
 async function pollDisruptions(env: Env): Promise<void> {
 	console.log("[pollDisruptions] Starting");
 
-	const res = await pkpFetch<DisruptionsResponse>(
-		"/api/v1/disruptions",
-		env.PKP_API_KEY,
-	);
+	const disruptions = await fetchDisruptionsApi(env.PKP_API_KEY);
 
-	if (!res || !res.success || !res.data?.disruptions) {
-		console.warn("[pollDisruptions] No data from API");
-		return;
+	if (disruptions.length === 0) {
+		console.warn("[pollDisruptions] No disruptions from API");
 	}
 
-	const disruptions = res.data.disruptions;
 	console.log(`[pollDisruptions] Fetched ${disruptions.length} disruptions`);
 
 	// 1. Write to KV (hot cache for frontend)
@@ -880,7 +671,7 @@ async function aggregateDaily(env: Env): Promise<void> {
 
 	let onTimeTrains = 0;
 	let cancelledTrains = 0;
-	const totalTrains = trainStats.results.length;
+	const totalTrainsYesterday = trainStats.results.length;
 
 	for (const row of trainStats.results) {
 		if ((row.was_cancelled as number) === 1) {
@@ -890,9 +681,9 @@ async function aggregateDaily(env: Env): Promise<void> {
 		}
 	}
 
-	const punctualityPct =
-		totalTrains > 0
-			? Math.round((onTimeTrains / totalTrains) * 1000) / 10
+	const punctualityPctYesterday =
+		totalTrainsYesterday > 0
+			? Math.round((onTimeTrains / totalTrainsYesterday) * 1000) / 10
 			: 0;
 
 	await env.DB.prepare(`
@@ -903,9 +694,9 @@ async function aggregateDaily(env: Env): Promise<void> {
 	`)
 		.bind(
 			yesterday,
-			totalTrains,
+			totalTrainsYesterday,
 			onTimeTrains,
-			punctualityPct,
+			punctualityPctYesterday,
 			Math.round((stats.avg_delay as number) * 10) / 10,
 			cancelledTrains,
 			stats.delay_0_5,
@@ -917,8 +708,8 @@ async function aggregateDaily(env: Env): Promise<void> {
 		.run();
 
 	console.log(
-		`[aggregateDaily] daily_stats — ${totalTrains} trains, ` +
-			`${onTimeTrains} on time (${punctualityPct}%), ${cancelledTrains} cancelled`,
+		`[aggregateDaily] daily_stats — ${totalTrainsYesterday} trains, ` +
+			`${onTimeTrains} on time (${punctualityPctYesterday}%), ${cancelledTrains} cancelled`,
 	);
 
 	// 2. Compute city_daily for each major city
@@ -987,6 +778,24 @@ async function aggregateDaily(env: Env): Promise<void> {
 	console.log(
 		`[aggregateDaily] Pruned ${pruneResult.meta.changes ?? 0} old snapshot rows`,
 	);
+
+	// 4. Prune old active_trains (keep 7 days)
+	const pruneActiveResult = await env.DB.prepare(
+		`DELETE FROM active_trains WHERE operating_date < date('now', '-7 days')`,
+	).run();
+
+	console.log(
+		`[aggregateDaily] Pruned ${pruneActiveResult.meta.changes ?? 0} old active_trains rows`,
+	);
+
+	// 5. Prune old train_routes (keep 7 days)
+	const pruneRoutesResult = await env.DB.prepare(
+		`DELETE FROM train_routes WHERE operating_date < date('now', '-7 days')`,
+	).run();
+
+	console.log(
+		`[aggregateDaily] Pruned ${pruneRoutesResult.meta.changes ?? 0} old train_routes rows`,
+	);
 }
 
 // ---------------------------------------------------------------------------
@@ -1050,14 +859,14 @@ async function backfillCityDaily(env: Env): Promise<void> {
 
 			const trainCount = cityStats.train_count as number;
 			const onTime = (onTimeStats?.on_time as number) || 0;
-			const avgDelay = Math.round(((cityStats.avg_delay as number) || 0) * 10) / 10;
+			const avgDelayVal = Math.round(((cityStats.avg_delay as number) || 0) * 10) / 10;
 			const punctuality = trainCount > 0 ? Math.round((onTime / trainCount) * 1000) / 10 : 0;
 
 			// Insert into city_daily
 			await env.DB.prepare(`
 				INSERT OR REPLACE INTO city_daily (city, date, train_count, avg_delay, punctuality_pct)
 				VALUES (?, ?, ?, ?, ?)
-			`).bind(city, date, trainCount, avgDelay, punctuality).run();
+			`).bind(city, date, trainCount, avgDelayVal, punctuality).run();
 
 			console.log(`[backfillCityDaily] ${city} ${date}: ${trainCount} trains, ${punctuality}% punctual`);
 		}
@@ -1159,8 +968,8 @@ async function dataQualityCheck(env: Env): Promise<DataQualityIssue[]> {
 				timestamp: now,
 			});
 		} else {
-			const stats = JSON.parse(kvStats);
-			const statsAge = new Date(stats.timestamp);
+			const statsData = JSON.parse(kvStats);
+			const statsAge = new Date(statsData.timestamp);
 			const statsAgeMinutes = (Date.now() - statsAge.getTime()) / (1000 * 60);
 
 			if (statsAgeMinutes > 10) {
@@ -1209,12 +1018,12 @@ async function reportDataQualityIssues(env: Env): Promise<void> {
 	const issues = await dataQualityCheck(env);
 
 	if (issues.length === 0) {
-		console.log('[dataQualityCheck] ✅ No data quality issues found');
+		console.log('[dataQualityCheck] No data quality issues found');
 		return;
 	}
 
 	// Log all issues
-	console.log(`[dataQualityCheck] ⚠️ Found ${issues.length} data quality issues:`);
+	console.log(`[dataQualityCheck] Found ${issues.length} data quality issues:`);
 	for (const issue of issues) {
 		const severity = issue.severity.toUpperCase();
 		console.log(`[dataQualityCheck] ${severity}: ${issue.type} - ${issue.message}`);
@@ -1234,7 +1043,7 @@ async function reportDataQualityIssues(env: Env): Promise<void> {
 	// For critical issues, we could add webhook notifications here
 	const criticalIssues = issues.filter(i => i.severity === 'critical');
 	if (criticalIssues.length > 0) {
-		console.error(`[dataQualityCheck] 🚨 ${criticalIssues.length} CRITICAL issues requiring immediate attention`);
+		console.error(`[dataQualityCheck] ${criticalIssues.length} CRITICAL issues requiring immediate attention`);
 		// TODO: Add Slack/email webhook notification here
 	}
 }
@@ -1245,7 +1054,8 @@ async function reportDataQualityIssues(env: Env): Promise<void> {
 
 async function checkMonitoringSessions(
 	env: Env,
-	trains: ApiTrain[],
+	trains: TrainOperationDto[],
+	stationDict: Record<string, string>,
 ): Promise<void> {
 	const today = todayDateStr();
 
@@ -1263,7 +1073,7 @@ async function checkMonitoringSessions(
 	);
 
 	// Build a lookup map: "scheduleId-orderId" → train
-	const trainMap = new Map<string, ApiTrain>();
+	const trainMap = new Map<string, TrainOperationDto>();
 	for (const t of trains) {
 		trainMap.set(`${t.scheduleId}-${t.orderId}`, t);
 	}
@@ -1282,7 +1092,7 @@ async function checkMonitoringSessions(
 async function processSession(
 	env: Env,
 	session: MonitoringSession,
-	trainMap: Map<string, ApiTrain>,
+	trainMap: Map<string, TrainOperationDto>,
 ): Promise<void> {
 	const trainAKey = `${session.train_a_schedule_id}-${session.train_a_order_id}`;
 	const trainA = trainMap.get(trainAKey);
@@ -1346,8 +1156,13 @@ async function processSession(
 		return;
 	}
 
-	const arrivalTime = new Date(trainAArrival).getTime();
-	const departureTime = new Date(trainBDeparture).getTime();
+	// Handle both time formats: HH:MM:SS (planned) and ISO datetime (actual)
+	const arrivalTime = trainAArrival.includes('T')
+		? new Date(trainAArrival).getTime()
+		: new Date(`${session.operating_date}T${trainAArrival}`).getTime();
+	const departureTime = trainBDeparture.includes('T')
+		? new Date(trainBDeparture).getTime()
+		: new Date(`${session.operating_date}T${trainBDeparture}`).getTime();
 	const bufferMinutes = (departureTime - arrivalTime) / 60_000;
 
 	console.log(
@@ -1400,35 +1215,149 @@ interface PushPayload {
 	data?: Record<string, unknown>;
 }
 
+/**
+ * Send a Web Push notification with VAPID authentication.
+ * Uses Web Crypto API for JWT signing (no npm dependencies).
+ */
 async function sendPushNotification(
 	subscriptionJson: string,
 	payload: PushPayload,
+	env?: { VAPID_PRIVATE_KEY?: string; VAPID_PUBLIC_KEY?: string },
 ): Promise<void> {
 	try {
 		const subscription = JSON.parse(subscriptionJson);
+		if (!subscription.endpoint) {
+			console.warn('[sendPushNotification] No endpoint in subscription');
+			return;
+		}
 
-		// Standard Web Push: POST to the subscription endpoint with the payload
-		// Note: Production implementation should use VAPID authentication.
-		// For now, we send a simple push message. The full VAPID signing
-		// requires the web-push library or manual JWT creation, which should
-		// be added when the push feature is built out in Phase 3.
+		const vapidPrivate = env?.VAPID_PRIVATE_KEY;
+		const vapidPublic = env?.VAPID_PUBLIC_KEY;
+
+		const headers: Record<string, string> = {
+			'Content-Type': 'application/octet-stream',
+			'Content-Length': '0',
+			'TTL': '86400',
+			'Urgency': 'high',
+		};
+
+		// Add VAPID auth if keys available
+		if (vapidPrivate && vapidPublic) {
+			const audience = new URL(subscription.endpoint).origin;
+			const jwt = await createVapidJwt(vapidPrivate, audience);
+			headers['Authorization'] = `vapid t=${jwt}, k=${vapidPublic}`;
+		}
+
+		// Send empty push (no payload encryption for MVP)
+		// Service worker will fetch details from API when it wakes
 		const res = await fetch(subscription.endpoint, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-				TTL: "86400",
-			},
-			body: JSON.stringify(payload),
+			method: 'POST',
+			headers,
 		});
 
 		if (!res.ok) {
-			console.error(
-				`[sendPushNotification] Failed: ${res.status} ${res.statusText}`,
-			);
+			console.error(`[sendPushNotification] Failed: ${res.status} ${res.statusText}`);
+			if (res.status === 410) {
+				console.log('[sendPushNotification] Subscription expired (410 Gone)');
+			}
+		} else {
+			console.log('[sendPushNotification] Push sent successfully');
 		}
 	} catch (err) {
 		console.error(`[sendPushNotification] Error: ${err}`);
 	}
+}
+
+/**
+ * Create a VAPID JWT signed with ECDSA P-256 (ES256) per RFC 8292.
+ */
+async function createVapidJwt(privateKeyBase64url: string, audience: string): Promise<string> {
+	// Import the 32-byte private key as ECDSA P-256
+	const rawKey = base64urlToBuffer(privateKeyBase64url);
+
+	const key = await crypto.subtle.importKey(
+		'pkcs8',
+		buildPkcs8FromRaw(new Uint8Array(rawKey)),
+		{ name: 'ECDSA', namedCurve: 'P-256' },
+		false,
+		['sign'],
+	);
+
+	// JWT header (ES256 = ECDSA P-256 + SHA-256)
+	const header = base64urlEncode(JSON.stringify({ typ: 'JWT', alg: 'ES256' }));
+	const now = Math.floor(Date.now() / 1000);
+	const jwtPayload = base64urlEncode(JSON.stringify({
+		aud: audience,
+		exp: now + 43200,
+		sub: 'mailto:admin@niejedzie.pl',
+	}));
+
+	const signingInput = `${header}.${jwtPayload}`;
+	const signature = await crypto.subtle.sign(
+		{ name: 'ECDSA', hash: 'SHA-256' },
+		key,
+		new TextEncoder().encode(signingInput),
+	);
+
+	// Convert DER signature to raw r||s format for JWT
+	const rawSig = derToRaw(new Uint8Array(signature));
+	return `${signingInput}.${base64urlEncode(rawSig)}`;
+}
+
+/** Wrap a 32-byte raw EC private key in PKCS#8 DER for Web Crypto import */
+function buildPkcs8FromRaw(rawKey: Uint8Array): ArrayBuffer {
+	// PKCS#8 prefix for EC P-256 private key (RFC 5958 + RFC 5480)
+	const prefix = new Uint8Array([
+		0x30, 0x41, 0x02, 0x01, 0x00, 0x30, 0x13, 0x06, 0x07, 0x2a, 0x86, 0x48,
+		0xce, 0x3d, 0x02, 0x01, 0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03,
+		0x01, 0x07, 0x04, 0x27, 0x30, 0x25, 0x02, 0x01, 0x01, 0x04, 0x20,
+	]);
+	const result = new Uint8Array(prefix.length + rawKey.length);
+	result.set(prefix);
+	result.set(rawKey, prefix.length);
+	return result.buffer;
+}
+
+/** Convert DER-encoded ECDSA signature to raw r||s (64 bytes) for JWT */
+function derToRaw(der: Uint8Array): Uint8Array {
+	// DER: 0x30 [len] 0x02 [rLen] [r] 0x02 [sLen] [s]
+	const raw = new Uint8Array(64);
+	let offset = 2; // skip 0x30 + length
+	// r
+	const rLen = der[offset + 1];
+	offset += 2;
+	const rStart = rLen > 32 ? offset + (rLen - 32) : offset;
+	const rDest = rLen < 32 ? 32 - rLen : 0;
+	raw.set(der.slice(rStart, rStart + Math.min(rLen, 32)), rDest);
+	offset += rLen;
+	// s
+	const sLen = der[offset + 1];
+	offset += 2;
+	const sStart = sLen > 32 ? offset + (sLen - 32) : offset;
+	const sDest = sLen < 32 ? 64 - sLen : 32;
+	raw.set(der.slice(sStart, sStart + Math.min(sLen, 32)), sDest);
+	return raw;
+}
+
+function base64urlEncode(input: string | Uint8Array): string {
+	let bytes: Uint8Array;
+	if (typeof input === 'string') {
+		bytes = new TextEncoder().encode(input);
+	} else {
+		bytes = input;
+	}
+	let binary = '';
+	for (const b of bytes) binary += String.fromCharCode(b);
+	return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+function base64urlToBuffer(base64url: string): ArrayBuffer {
+	const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+	const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+	const binary = atob(padded);
+	const bytes = new Uint8Array(binary.length);
+	for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+	return bytes.buffer;
 }
 
 // ---------------------------------------------------------------------------
@@ -1442,35 +1371,24 @@ export default {
 		ctx: ExecutionContext,
 	): Promise<void> {
 		switch (controller.cron) {
-			case "*/2 * * * *":
-				ctx.waitUntil(
-					pollOperations(env).catch((err) =>
-						console.error(`[pollOperations] Fatal: ${err}`),
-					),
-				);
-				break;
-
 			case "*/5 * * * *":
 				ctx.waitUntil(
-					pollDisruptions(env).catch((err) =>
-						console.error(`[pollDisruptions] Fatal: ${err}`),
-					),
+					Promise.all([
+						pollOperations(env).catch((err) =>
+							console.error(`[pollOperations] Fatal: ${err}`),
+						),
+						pollDisruptions(env).catch((err) =>
+							console.error(`[pollDisruptions] Fatal: ${err}`),
+						),
+					]),
 				);
 				break;
 
 			case "0 2 * * *":
 				ctx.waitUntil(
-					(async () => {
-						await aggregateDaily(env).catch((err) =>
-							console.error(`[aggregateDaily] Fatal: ${err}`),
-						);
-						await backfillCityDaily(env).catch((err) =>
-							console.error(`[backfillCityDaily] Fatal: ${err}`),
-						);
-						await loadStations(env).catch((err) =>
-							console.error(`[loadStations] Fatal: ${err}`),
-						);
-					})(),
+					syncDaily(env).catch((err) =>
+						console.error(`[syncDaily] Fatal: ${err}`),
+					),
 				);
 				break;
 
@@ -1488,7 +1406,7 @@ export default {
 		const url = new URL(request.url);
 
 		if (url.pathname === "/health") {
-			return Response.json({ status: "ok", worker: "niejedzie-cron" });
+			return Response.json({ status: "ok", worker: "niejedzie-cron", api: PKP_API_BASE });
 		}
 
 		// Manual trigger endpoints (for testing / debugging)
@@ -1500,6 +1418,11 @@ export default {
 		if (url.pathname === "/__trigger/disruptions") {
 			ctx.waitUntil(pollDisruptions(env));
 			return Response.json({ triggered: "pollDisruptions" });
+		}
+
+		if (url.pathname === "/__trigger/sync-daily") {
+			ctx.waitUntil(syncDaily(env));
+			return Response.json({ triggered: "syncDaily" });
 		}
 
 		if (url.pathname === "/__trigger/aggregate") {
@@ -1515,52 +1438,6 @@ export default {
 		if (url.pathname === "/__trigger/data-quality") {
 			ctx.waitUntil(reportDataQualityIssues(env));
 			return Response.json({ triggered: "dataQualityCheck" });
-		}
-
-		if (url.pathname === "/__trigger/scraper") {
-			try {
-				const trains = await fetchFromScraper(env);
-				return Response.json({
-					triggered: "scraper",
-					trainCount: trains?.length ?? 0,
-					trains: trains?.slice(0, 10) ?? [], // Preview first 10
-				});
-			} catch (err) {
-				return Response.json(
-					{ error: "scraper failed", message: String(err) },
-					{ status: 500 },
-				);
-			}
-		}
-
-		if (url.pathname === "/__trigger/gtfs-rt") {
-			try {
-				const stats = await fetchGtfsRtStats(env);
-				return Response.json({
-					triggered: "gtfs-rt",
-					stats,
-				});
-			} catch (err) {
-				return Response.json(
-					{ error: "gtfs-rt failed", message: String(err) },
-					{ status: 500 },
-				);
-			}
-		}
-
-		if (url.pathname === "/__trigger/load-stations") {
-			try {
-				const count = await loadStations(env);
-				return Response.json({
-					triggered: "loadStations",
-					stationsLoaded: count,
-				});
-			} catch (err) {
-				return Response.json(
-					{ error: "loadStations failed", message: String(err) },
-					{ status: 500 },
-				);
-			}
 		}
 
 		return new Response("niejedzie-cron worker", { status: 200 });
