@@ -204,14 +204,19 @@ export async function fetchStatistics(
   );
 }
 
-export async function fetchAllSchedules(
+/**
+ * Fetch schedules page by page, calling the handler for each page.
+ * Accumulates station + carrier dictionaries across pages and passes them to each callback.
+ */
+export async function fetchSchedulesPages(
   apiKey: string,
   date: string,
-): Promise<{ routes: RouteDto[]; stations: Record<string, string>; carriers: Record<string, string> }> {
-  const allRoutes: RouteDto[] = [];
+  onPage: (routes: RouteDto[], stations: Record<string, string>, pageNum: number) => Promise<void>,
+): Promise<{ totalRoutes: number; stations: Record<string, string>; carriers: Record<string, string> }> {
   let allStations: Record<string, string> = {};
   let allCarriers: Record<string, string> = {};
   let page = 1;
+  let totalRoutes = 0;
   const pageSize = 1000;
 
   while (true) {
@@ -229,12 +234,10 @@ export async function fetchAllSchedules(
 
     if (!res || !res.routes?.length) {
       if (page === 1) {
-        console.warn("[fetchAllSchedules] No data from API on first page");
+        console.warn("[fetchSchedulesPages] No data from API on first page");
       }
       break;
     }
-
-    allRoutes.push(...res.routes);
 
     if (res.dictionaries?.stations) {
       for (const [id, info] of Object.entries(res.dictionaries.stations)) {
@@ -245,12 +248,20 @@ export async function fetchAllSchedules(
       allCarriers = { ...allCarriers, ...res.dictionaries.carriers };
     }
 
+    totalRoutes += res.routes.length;
+    await onPage(res.routes, allStations, page);
+
     if (res.routes.length < pageSize) break;
     page++;
+
+    if (page > 100) {
+      console.warn(`[fetchSchedulesPages] Stopped at page ${page} (safety cap)`);
+      break;
+    }
   }
 
-  console.log(`[fetchAllSchedules] Fetched ${allRoutes.length} routes, ${Object.keys(allStations).length} stations`);
-  return { routes: allRoutes, stations: allStations, carriers: allCarriers };
+  console.log(`[fetchSchedulesPages] Processed ${totalRoutes} routes across ${page} pages`);
+  return { totalRoutes, stations: allStations, carriers: allCarriers };
 }
 
 export async function fetchDisruptions(

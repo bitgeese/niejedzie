@@ -8,7 +8,7 @@
 import {
 	fetchOperationsPages,
 	fetchStatistics,
-	fetchAllSchedules,
+	fetchSchedulesPages,
 	fetchDisruptions as fetchDisruptionsApi,
 	type TrainOperationDto,
 	type OperationStationDto,
@@ -503,80 +503,71 @@ async function syncDaily(env: Env): Promise<void> {
 	const today = todayDateStr();
 	console.log(`[syncDaily] Starting daily sync for ${today}`);
 
-	// 1. Fetch all schedules for today (train identity)
-	const { routes, stations: stationDict, carriers } = await fetchAllSchedules(env.PKP_API_KEY, today);
-	console.log(`[syncDaily] Fetched ${routes.length} routes, ${Object.keys(stationDict).length} stations`);
-
-	// 2. Upsert trains table with schedule data
+	// Prepared statements (reused across pages)
 	const trainUpsertStmt = env.DB.prepare(`
 		INSERT OR REPLACE INTO trains
 			(schedule_id, order_id, train_number, carrier, category, route_start, route_end, updated_at)
 		VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
 	`);
 
-	const trainStmts: D1PreparedStatement[] = [];
-	for (const route of routes) {
-		const trainNumber = route.nationalNumber ?? route.name ?? `${route.scheduleId}`;
-		const carrier = route.carrierCode ?? '';
-		const category = route.commercialCategorySymbol ?? '';
-
-		// Determine route start/end from station names
-		const firstStation = route.stations[0];
-		const lastStation = route.stations[route.stations.length - 1];
-		const routeStart = firstStation ? (stationDict[String(firstStation.stationId)] ?? '') : '';
-		const routeEnd = lastStation ? (stationDict[String(lastStation.stationId)] ?? '') : '';
-
-		trainStmts.push(
-			trainUpsertStmt.bind(
-				route.scheduleId,
-				route.orderId,
-				trainNumber,
-				carrier,
-				category,
-				routeStart,
-				routeEnd,
-			),
-		);
-	}
-
-	if (trainStmts.length > 0) {
-		const upserted = await batchExecute(env.DB, trainStmts);
-		console.log(`[syncDaily] Upserted ${upserted} train records`);
-	}
-
-	// 3. Upsert train_routes from schedule station data
 	const routeStmt = env.DB.prepare(`
 		INSERT OR REPLACE INTO train_routes
 			(operating_date, train_number, stop_sequence, stop_id, arrival_time, departure_time, trip_id)
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`);
 
-	const routeStmts: D1PreparedStatement[] = [];
-	for (const route of routes) {
-		const trainNumber = route.nationalNumber ?? route.name ?? `${route.scheduleId}`;
-		const tripId = `${route.scheduleId}-${route.orderId}`;
+	// 1. Stream schedule pages — write trains + routes to D1 per page
+	const { totalRoutes, stations: stationDict } = await fetchSchedulesPages(
+		env.PKP_API_KEY,
+		today,
+		async (routes: RouteDto[], stations: Record<string, string>, pageNum: number) => {
+			console.log(`[syncDaily] Processing schedule page ${pageNum} — ${routes.length} routes`);
 
-		for (const st of route.stations) {
-			routeStmts.push(
-				routeStmt.bind(
-					today,
-					trainNumber,
-					st.orderNumber,
-					st.stationId,
-					st.arrivalTime ?? null,
-					st.departureTime ?? null,
-					tripId,
-				),
-			);
-		}
-	}
+			const trainBatch: D1PreparedStatement[] = [];
+			const routeBatch: D1PreparedStatement[] = [];
 
-	if (routeStmts.length > 0) {
-		const upserted = await batchExecute(env.DB, routeStmts);
-		console.log(`[syncDaily] Upserted ${upserted} train route stops`);
-	}
+			for (const route of routes) {
+				const trainNumber = route.nationalNumber ?? route.name ?? `${route.scheduleId}`;
+				const carrier = route.carrierCode ?? '';
+				const category = route.commercialCategorySymbol ?? '';
 
-	// 4. Update stations table from dictionary
+				const firstStation = route.stations?.[0];
+				const lastStation = route.stations?.[route.stations.length - 1];
+				const routeStart = firstStation ? (stations[String(firstStation.stationId)] ?? '') : '';
+				const routeEnd = lastStation ? (stations[String(lastStation.stationId)] ?? '') : '';
+
+				trainBatch.push(
+					trainUpsertStmt.bind(
+						route.scheduleId, route.orderId, trainNumber, carrier, category, routeStart, routeEnd,
+					),
+				);
+
+				// Route stops
+				const tripId = `${route.scheduleId}-${route.orderId}`;
+				for (const st of route.stations ?? []) {
+					routeBatch.push(
+						routeStmt.bind(
+							today, trainNumber, st.orderNumber, st.stationId,
+							st.arrivalTime ?? null, st.departureTime ?? null, tripId,
+						),
+					);
+				}
+			}
+
+			if (trainBatch.length > 0) {
+				await batchExecute(env.DB, trainBatch);
+			}
+			if (routeBatch.length > 0) {
+				await batchExecute(env.DB, routeBatch);
+			}
+
+			console.log(`[syncDaily] Page ${pageNum} — wrote ${trainBatch.length} trains, ${routeBatch.length} route stops`);
+		},
+	);
+
+	console.log(`[syncDaily] Schedules done — ${totalRoutes} total routes processed`);
+
+	// 2. Update stations table from accumulated dictionary
 	const stationStmt = env.DB.prepare(`
 		INSERT OR REPLACE INTO stations (station_id, name, city)
 		VALUES (?, ?, ?)
@@ -586,13 +577,8 @@ async function syncDaily(env: Env): Promise<void> {
 	for (const [idStr, name] of Object.entries(stationDict)) {
 		const stationId = Number(idStr);
 		if (isNaN(stationId)) continue;
-
-		// Extract city from station name (e.g., "Warszawa Centralna" → "Warszawa")
 		const city = name.split(/\s+/)[0] ?? name;
-
-		stationStmts.push(
-			stationStmt.bind(stationId, name, city),
-		);
+		stationStmts.push(stationStmt.bind(stationId, name, city));
 	}
 
 	if (stationStmts.length > 0) {
@@ -600,7 +586,7 @@ async function syncDaily(env: Env): Promise<void> {
 		console.log(`[syncDaily] Upserted ${upserted} stations`);
 	}
 
-	// 5. Run existing aggregation and backfill
+	// 3. Run existing aggregation and backfill
 	await aggregateDaily(env).catch((err) =>
 		console.error(`[syncDaily] aggregateDaily failed: ${err}`),
 	);
