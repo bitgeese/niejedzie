@@ -231,10 +231,10 @@ async function pollOperations(env: Env): Promise<void> {
 							st.stationId,
 							stationName,
 							st.actualSequenceNumber ?? st.plannedSequenceNumber ?? 0,
-							st.plannedArrival,
-							st.plannedDeparture,
-							st.actualArrival,
-							st.actualDeparture,
+							st.plannedArrival ?? null,
+							st.plannedDeparture ?? null,
+							st.actualArrival ?? null,
+							st.actualDeparture ?? null,
 							arrDelay,
 							depDelay,
 							st.isConfirmed ? 1 : 0,
@@ -1427,6 +1427,15 @@ export default {
 		}
 
 		// Manual trigger endpoints (for testing / debugging)
+		if (url.pathname === "/__trigger/operations-sync") {
+			try {
+				await pollOperations(env);
+				return Response.json({ status: "ok", ran: "pollOperations" });
+			} catch (err) {
+				return Response.json({ error: String(err), stack: (err as Error).stack }, { status: 500 });
+			}
+		}
+
 		if (url.pathname === "/__trigger/operations") {
 			ctx.waitUntil(pollOperations(env));
 			return Response.json({ triggered: "pollOperations" });
