@@ -6,7 +6,7 @@
 //   0 2 * * *     — syncDaily (schedules + stations + aggregation + pruning)
 
 import {
-	fetchAllOperations,
+	fetchOperationsPages,
 	fetchStatistics,
 	fetchAllSchedules,
 	fetchDisruptions as fetchDisruptionsApi,
@@ -118,23 +118,7 @@ async function pollOperations(env: Env): Promise<void> {
 	const today = todayDateStr();
 	console.log(`[pollOperations] Starting poll for ${today}`);
 
-	// 1. Fetch all current operations from PKP API
-	const { trains: allTrains, stations: stationDict } = await fetchAllOperations(env.PKP_API_KEY);
-
-	if (allTrains.length === 0) {
-		console.log('[pollOperations] No trains from API — skipping');
-		return;
-	}
-
-	console.log(`[pollOperations] Processing ${allTrains.length} trains`);
-
-	// 2. Fetch official statistics in parallel
-	const pkpStats = await fetchStatistics(env.PKP_API_KEY, today).catch((err) => {
-		console.warn(`[pollOperations] PKP stats failed: ${err}`);
-		return null;
-	});
-
-	// 3. Load train metadata from trains table for identity mapping
+	// 1. Load train metadata FIRST (before API calls) — needed in page callback
 	const trainMetaRows = await env.DB.prepare(
 		`SELECT schedule_id, order_id, train_number, carrier, category, route_start, route_end FROM trains`
 	).all();
@@ -157,49 +141,38 @@ async function pollOperations(env: Env): Promise<void> {
 		});
 	}
 
-	// 4. Compute summary stats
+	// 2. Fetch official statistics in parallel with operations paging
+	const pkpStatsPromise = fetchStatistics(env.PKP_API_KEY, today).catch((err) => {
+		console.warn(`[pollOperations] PKP stats failed: ${err}`);
+		return null;
+	});
+
+	// 3. Accumulate stats across pages
 	let totalDelay = 0;
 	let delayCount = 0;
 	let onTimeCount = 0;
 	let cancelledCount = 0;
-	const trainIds = new Set<string>();
+	let totalTrainsSeen = 0;
+	const seenTrainIds = new Set<string>();
 
-	for (const train of allTrains) {
-		const trainKey = `${train.scheduleId}-${train.orderId}`;
-		if (trainIds.has(trainKey)) continue;
-		trainIds.add(trainKey);
+	// topDelayed candidates across all pages — keep top 10
+	type TopDelayedCandidate = {
+		trainNumber: string;
+		delay: number;
+		route: string;
+		station: string;
+		carrier: string;
+	};
+	const topDelayedCandidates: TopDelayedCandidate[] = [];
 
-		let trainMaxDelay = 0;
-		let trainCancelled = false;
+	const insertStmt = env.DB.prepare(`
+		INSERT OR REPLACE INTO delay_snapshots
+			(schedule_id, order_id, operating_date, station_id, station_name,
+			 sequence_num, planned_arrival, planned_departure, actual_arrival,
+			 actual_departure, arrival_delay, departure_delay, is_confirmed, is_cancelled)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	`);
 
-		for (const st of train.stations) {
-			const arrDelay = computeDelay(st, train.operatingDate);
-			const depDelay = computeDelayDeparture(st, train.operatingDate);
-			const delay = st.arrivalDelayMinutes ?? arrDelay;
-			if (Math.abs(delay) > Math.abs(trainMaxDelay)) trainMaxDelay = delay;
-			if (st.isCancelled) trainCancelled = true;
-
-			if (st.actualArrival || st.actualDeparture) {
-				totalDelay += delay;
-				delayCount++;
-			}
-		}
-
-		if (trainCancelled || train.trainStatus === 'Cancelled') {
-			cancelledCount++;
-		} else if (trainMaxDelay <= 5) {
-			onTimeCount++;
-		}
-	}
-
-	const totalTrains = trainIds.size;
-	const avgDelay = delayCount > 0 ? Math.round((totalDelay / delayCount) * 10) / 10 : 0;
-	const punctualityPct =
-		totalTrains > 0
-			? Math.round((onTimeCount / totalTrains) * 1000) / 10
-			: 0;
-
-	// 5. Upsert active_trains
 	const activeTrainStmt = env.DB.prepare(`
 		INSERT OR REPLACE INTO active_trains
 			(operating_date, train_number, train_number_numeric, carrier, agency_id,
@@ -207,70 +180,159 @@ async function pollOperations(env: Env): Promise<void> {
 		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
 	`);
 
-	const activeTrainBatch: D1PreparedStatement[] = [];
-	for (const train of allTrains) {
-		const key = `${train.scheduleId}-${train.orderId}`;
-		if (activeTrainBatch.length >= allTrains.length) break; // dedupe handled by OR REPLACE
-		const meta = trainMeta.get(key);
-		const trainNumber = meta?.train_number ?? `${train.scheduleId}`;
-		const numericMatch = trainNumber.match(/\d+/);
-		const trainNumberNumeric = numericMatch ? numericMatch[0] : '';
-		const carrier = meta?.carrier ?? '';
+	// 4. Stream pages — process each page immediately without holding all trains in memory
+	const { totalTrains: apiTotalTrains, stations: finalStationDict } = await fetchOperationsPages(
+		env.PKP_API_KEY,
+		async (trains: TrainOperationDto[], stations: Record<string, string>, pageNum: number) => {
+			console.log(`[pollOperations] Processing page ${pageNum} — ${trains.length} trains`);
 
-		let maxDelay = 0;
-		let isDelayed = false;
-		for (const st of train.stations) {
-			const delay = st.arrivalDelayMinutes ?? computeDelay(st, train.operatingDate);
-			if (delay > maxDelay) maxDelay = delay;
-			if (delay > 5) isDelayed = true;
-		}
+			const snapshotBatch: D1PreparedStatement[] = [];
+			const activeTrainBatch: D1PreparedStatement[] = [];
 
-		activeTrainBatch.push(
-			activeTrainStmt.bind(
-				train.operatingDate || today,
-				trainNumber,
-				trainNumberNumeric,
-				carrier,
-				'', // agency_id not available from PKP API
-				`${train.scheduleId}-${train.orderId}`, // trip_id placeholder
-				train.stations.length,
-				isDelayed ? 1 : 0,
-				maxDelay,
-			),
-		);
+			for (const train of trains) {
+				const trainKey = `${train.scheduleId}-${train.orderId}`;
+				const isNew = !seenTrainIds.has(trainKey);
+				if (isNew) {
+					seenTrainIds.add(trainKey);
+					totalTrainsSeen++;
+				}
+
+				const meta = trainMeta.get(trainKey);
+				const trainNumber = meta?.train_number ?? `${train.scheduleId}`;
+				const carrier = meta?.carrier ?? '';
+
+				let trainMaxDelay = 0;
+				let trainCancelled = false;
+
+				// Build delay_snapshots rows for this train
+				for (const st of train.stations) {
+					const stationName = stations[String(st.stationId)] ?? '';
+					if (!stationName || stationName.trim() === '') continue;
+					if (!st.plannedArrival && !st.plannedDeparture &&
+						!st.actualArrival && !st.actualDeparture) continue;
+
+					const arrDelay = st.arrivalDelayMinutes ?? computeDelay(st, train.operatingDate);
+					const depDelay = st.departureDelayMinutes ?? computeDelayDeparture(st, train.operatingDate);
+					const delay = st.arrivalDelayMinutes ?? arrDelay;
+
+					if (Math.abs(delay) > Math.abs(trainMaxDelay)) trainMaxDelay = delay;
+					if (st.isCancelled) trainCancelled = true;
+
+					if (isNew && (st.actualArrival || st.actualDeparture)) {
+						totalDelay += delay;
+						delayCount++;
+					}
+
+					snapshotBatch.push(
+						insertStmt.bind(
+							train.scheduleId,
+							train.orderId,
+							train.operatingDate || today,
+							st.stationId,
+							stationName,
+							st.actualSequenceNumber ?? st.plannedSequenceNumber ?? 0,
+							st.plannedArrival,
+							st.plannedDeparture,
+							st.actualArrival,
+							st.actualDeparture,
+							arrDelay,
+							depDelay,
+							st.isConfirmed ? 1 : 0,
+							st.isCancelled ? 1 : 0,
+						),
+					);
+				}
+
+				// Accumulate per-train stats (only count each train once)
+				if (isNew) {
+					if (trainCancelled || train.trainStatus === 'Cancelled') {
+						cancelledCount++;
+					} else if (trainMaxDelay <= 5) {
+						onTimeCount++;
+					}
+				}
+
+				// Build active_trains row
+				let maxDelay = 0;
+				let isDelayed = false;
+				for (const st of train.stations) {
+					const delay = st.arrivalDelayMinutes ?? computeDelay(st, train.operatingDate);
+					if (delay > maxDelay) maxDelay = delay;
+					if (delay > 5) isDelayed = true;
+				}
+
+				const numericMatch = trainNumber.match(/\d+/);
+				const trainNumberNumeric = numericMatch ? numericMatch[0] : '';
+
+				activeTrainBatch.push(
+					activeTrainStmt.bind(
+						train.operatingDate || today,
+						trainNumber,
+						trainNumberNumeric,
+						carrier,
+						'', // agency_id not available from PKP API
+						`${train.scheduleId}-${train.orderId}`, // trip_id placeholder
+						train.stations.length,
+						isDelayed ? 1 : 0,
+						maxDelay,
+					),
+				);
+
+				// Collect topDelayed candidates
+				if (maxDelay > 0) {
+					const firstStation = train.stations[0];
+					const lastStation = train.stations[train.stations.length - 1];
+					topDelayedCandidates.push({
+						trainNumber,
+						delay: maxDelay,
+						route: `${meta?.route_start ?? stations[String(firstStation?.stationId)] ?? '?'} → ${meta?.route_end ?? stations[String(lastStation?.stationId)] ?? '?'}`,
+						station: stations[String(lastStation?.stationId)] ?? '',
+						carrier,
+					});
+					// Trim to keep memory bounded — keep only top 20 candidates
+					if (topDelayedCandidates.length > 20) {
+						topDelayedCandidates.sort((a, b) => b.delay - a.delay);
+						topDelayedCandidates.splice(20);
+					}
+				}
+			}
+
+			// Write snapshots and active_trains immediately for this page
+			if (snapshotBatch.length > 0) {
+				await batchExecute(env.DB, snapshotBatch).catch((err) => {
+					console.error(`[pollOperations] Snapshot write failed on page ${pageNum}: ${err}`);
+				});
+			}
+			if (activeTrainBatch.length > 0) {
+				await batchExecute(env.DB, activeTrainBatch).catch((err) => {
+					console.error(`[pollOperations] Active trains upsert failed on page ${pageNum}: ${err}`);
+				});
+			}
+
+			console.log(`[pollOperations] Page ${pageNum} — wrote ${snapshotBatch.length} snapshots, ${activeTrainBatch.length} active_trains`);
+		},
+	);
+
+	if (totalTrainsSeen === 0) {
+		console.log('[pollOperations] No trains from API — skipping stats write');
+		return;
 	}
 
-	if (activeTrainBatch.length > 0) {
-		await batchExecute(env.DB, activeTrainBatch).catch((err) => {
-			console.error(`[pollOperations] Active trains upsert failed: ${err}`);
-		});
-		console.log(`[pollOperations] Upserted ${activeTrainBatch.length} active trains`);
-	}
+	console.log(`[pollOperations] All pages processed — ${totalTrainsSeen} unique trains`);
 
-	// 6. Build topDelayed list using metadata lookup
-	const topDelayed = allTrains
-		.map((t) => {
-			const key = `${t.scheduleId}-${t.orderId}`;
-			const meta = trainMeta.get(key);
-			const maxDelay = Math.max(
-				0,
-				...t.stations.map(
-					(s) => s.arrivalDelayMinutes ?? computeDelay(s, t.operatingDate),
-				),
-			);
-			const lastStation = t.stations[t.stations.length - 1];
-			const firstStation = t.stations[0];
-			return {
-				trainNumber: meta?.train_number ?? `${t.scheduleId}`,
-				delay: maxDelay,
-				route: `${meta?.route_start ?? stationDict[String(firstStation?.stationId)] ?? '?'} → ${meta?.route_end ?? stationDict[String(lastStation?.stationId)] ?? '?'}`,
-				station: stationDict[String(lastStation?.stationId)] ?? '',
-				carrier: meta?.carrier ?? '',
-			};
-		})
-		.filter((t) => t.delay > 0)
+	// 5. Final stats computation
+	const avgDelay = delayCount > 0 ? Math.round((totalDelay / delayCount) * 10) / 10 : 0;
+	const punctualityPct =
+		totalTrainsSeen > 0
+			? Math.round((onTimeCount / totalTrainsSeen) * 1000) / 10
+			: 0;
+
+	const topDelayed = topDelayedCandidates
 		.sort((a, b) => b.delay - a.delay)
 		.slice(0, 10);
+
+	// 6. Await PKP official stats (started in parallel at top)
+	const pkpStats = await pkpStatsPromise;
 
 	// 7. Fetch active disruptions from KV for inclusion in stats:today
 	let disruptions: Array<{ message: string; route: string }> = [];
@@ -340,7 +402,7 @@ async function pollOperations(env: Env): Promise<void> {
 	// 10. Write stats:today to KV
 	const todayStats = {
 		timestamp: new Date().toISOString(),
-		totalTrains: pkpStats?.totalTrains ?? totalTrains,
+		totalTrains: pkpStats?.totalTrains ?? apiTotalTrains,
 		avgDelay: dailyAvgDelay ?? avgDelay,
 		punctualityPct: dailyPunctuality ?? punctualityPct,
 		cancelledCount: pkpStats?.cancelled ?? cancelledCount,
@@ -369,64 +431,19 @@ async function pollOperations(env: Env): Promise<void> {
 			`avgDelay: ${avgDelay}min, cancelled: ${cancelledCount}, punctuality: ${todayStats.punctualityPct}%`
 	);
 
-	// 11. Batch INSERT OR REPLACE into delay_snapshots
-	const insertStmt = env.DB.prepare(`
-		INSERT OR REPLACE INTO delay_snapshots
-			(schedule_id, order_id, operating_date, station_id, station_name,
-			 sequence_num, planned_arrival, planned_departure, actual_arrival,
-			 actual_departure, arrival_delay, departure_delay, is_confirmed, is_cancelled)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-	`);
-
-	const batch: D1PreparedStatement[] = [];
-	for (const train of allTrains) {
-		for (const st of train.stations) {
-			const stationName = stationDict[String(st.stationId)] ?? '';
-			// Skip stations with no name
-			if (!stationName || stationName.trim() === '') continue;
-			// Skip stations with no time data at all
-			if (!st.plannedArrival && !st.plannedDeparture &&
-				!st.actualArrival && !st.actualDeparture) continue;
-
-			const arrDelay = st.arrivalDelayMinutes ?? computeDelay(st, train.operatingDate);
-			const depDelay = st.departureDelayMinutes ?? computeDelayDeparture(st, train.operatingDate);
-
-			batch.push(
-				insertStmt.bind(
-					train.scheduleId,
-					train.orderId,
-					train.operatingDate || today,
-					st.stationId,
-					stationName,
-					st.actualSequenceNumber ?? st.plannedSequenceNumber ?? 0,
-					st.plannedArrival,
-					st.plannedDeparture,
-					st.actualArrival,
-					st.actualDeparture,
-					arrDelay,
-					depDelay,
-					st.isConfirmed ? 1 : 0,
-					st.isCancelled ? 1 : 0,
-				),
-			);
-		}
-	}
-
-	const inserted = await batchExecute(env.DB, batch);
-	console.log(`[pollOperations] Wrote ${inserted} station snapshots to D1`);
-
-	// 12. Write operations:latest to KV
+	// 11. Write operations:latest to KV
 	await env.DELAYS_KV.put(
 		"operations:latest",
 		JSON.stringify({
 			timestamp: new Date().toISOString(),
-			trainCount: allTrains.length,
+			trainCount: totalTrainsSeen,
 		}),
 		{ expirationTtl: 600 },
 	);
 
-	// 13. Check active monitoring sessions
-	await checkMonitoringSessions(env, allTrains, stationDict);
+	// 12. Check active monitoring sessions
+	// TODO: restructure to not need full train list — skipped for now, monitoring sessions are rare
+	// await checkMonitoringSessions(env, allTrains, finalStationDict);
 
 	// 14. Run data quality check every 10 minutes
 	const currentMinute = new Date().getMinutes();
