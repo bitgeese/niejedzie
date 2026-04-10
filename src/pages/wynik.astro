@@ -1,320 +1,420 @@
 ---
+export const prerender = false;
 import Base from '../layouts/Base.astro';
 import { PRICES } from '../lib/constants';
+import { getPolandDate } from '../lib/time-utils';
+import { env } from 'cloudflare:workers';
 
-// This is a demo page - connection monitoring is being developed
-const isDemoMode = true;
+// Read form query params
+const trainParam = Astro.url.searchParams.get('train')?.trim() || '';
+const destParam = Astro.url.searchParams.get('destination')?.trim() || '';
 
-// Demo data for UI preview only - NOT real train information
-const demoTrain1 = {
-  number: 'IC 5313',
-  from: 'Kraków Główny',
-  to: 'Warszawa Centralna',
-  scheduledArrival: '13:45',
-  estimatedArrival: '14:03',
-  delay: 18,
-  status: 'delayed',
-};
+// Redirect if no params
+if (!trainParam || !destParam) {
+  return Astro.redirect('/');
+}
 
-const demoTrain2 = {
-  number: 'EIC 1701',
-  from: 'Warszawa Centralna',
-  to: 'Gdańsk Główny',
-  scheduledDeparture: '14:15',
-  estimatedDeparture: '14:15',
-  delay: 0,
-  status: 'on-time',
-};
+// Connection check logic (inline, avoids self-fetch)
+let data: any = null;
+let fetchError: string | null = null;
 
-const demoTransfer = {
-  station: 'Warszawa Centralna',
-  plannedBuffer: 30,
-  currentBuffer: 12,
-};
+try {
+  const today = getPolandDate();
 
-const bufferUsedPercent = Math.round(((demoTransfer.plannedBuffer - demoTransfer.currentBuffer) / demoTransfer.plannedBuffer) * 100);
-const bufferColor = demoTransfer.currentBuffer > 20 ? 'green' : demoTransfer.currentBuffer > 10 ? 'amber' : 'red';
+  const numericPart = trainParam.replace(/^(IC|EIC|EIP|TLK|KS|KM|SKM|R|RE|IR|EN)\s*/i, '').trim();
+
+  // 1. Find train
+  const trainRow = await env.DB.prepare(
+    `SELECT train_number, carrier, is_delayed, max_delay FROM active_trains WHERE operating_date = ? AND (train_number LIKE ? OR train_number_numeric LIKE ?) LIMIT 1`
+  ).bind(today, `%${numericPart}%`, `%${numericPart}%`).first();
+
+  if (!trainRow) {
+    data = { type: 'not_found', message: `Nie znaleziono pociągu "${trainParam}"` };
+  } else {
+    const trainNumber = trainRow.train_number as string;
+    const trainInfo = {
+      trainNumber,
+      carrier: (trainRow.carrier as string) || (trainRow.agency_id as string) || '',
+      isDelayed: (trainRow.is_delayed as number) === 1,
+      maxDelay: (trainRow.max_delay as number) || 0,
+    };
+
+    // 2. Find destination station
+    let destRow = await env.DB.prepare(`SELECT station_id, name FROM stations WHERE name = ? LIMIT 1`).bind(destParam).first();
+    if (!destRow) destRow = await env.DB.prepare(
+      `SELECT station_id, name FROM stations WHERE name LIKE ? ORDER BY CASE WHEN name LIKE '%Główny%' OR name LIKE '%Główna%' OR name LIKE '%Centralna%' OR name LIKE '%Centralny%' THEN 0 ELSE 1 END, length(name) LIMIT 1`
+    ).bind(`${destParam}%`).first();
+    if (!destRow) destRow = await env.DB.prepare(
+      `SELECT station_id, name FROM stations WHERE name LIKE ? ORDER BY CASE WHEN name LIKE '%Główny%' OR name LIKE '%Główna%' OR name LIKE '%Centralna%' OR name LIKE '%Centralny%' THEN 0 ELSE 1 END, length(name) LIMIT 1`
+    ).bind(`%${destParam}%`).first();
+
+    if (!destRow) {
+      data = { type: 'not_found', train: trainInfo, message: `Nie znaleziono stacji "${destParam}"` };
+    } else {
+      const dest = { stationId: destRow.station_id as number, stationName: destRow.name as string };
+
+      // 3. Get train's route
+      const routeRows = await env.DB.prepare(
+        `SELECT tr.stop_sequence, tr.stop_id, tr.arrival_time, tr.departure_time, s.name AS station_name FROM train_routes tr LEFT JOIN stations s ON s.station_id = tr.stop_id WHERE tr.operating_date = ? AND tr.train_number = ? ORDER BY tr.stop_sequence`
+      ).bind(today, trainNumber).all();
+
+      if (!routeRows.results?.length) {
+        data = { type: 'no_route', train: trainInfo, destination: dest, message: 'Brak danych o trasie' };
+      } else {
+        const route = routeRows.results.map((r: any) => ({
+          stopSequence: r.stop_sequence, stopId: r.stop_id,
+          stationName: r.station_name || '', arrivalTime: r.arrival_time, departureTime: r.departure_time,
+        }));
+
+        // 4. Check if destination is on route
+        const destStop = route.find((s: any) => s.stopId === dest.stationId);
+
+        if (destStop) {
+          data = { type: 'direct', train: trainInfo, destination: dest, direct: { arrivalTime: destStop.arrivalTime, departureTime: destStop.departureTime, stopSequence: destStop.stopSequence }, route };
+        } else {
+          // 5. Find connections from last stop
+          const lastStop = route[route.length - 1];
+          const altRows = await env.DB.prepare(
+            `SELECT DISTINCT tr1.train_number, tr1.departure_time, tr2.arrival_time,
+                    at.carrier, at.is_delayed, at.max_delay
+             FROM train_routes tr1
+             JOIN train_routes tr2 ON tr1.train_number = tr2.train_number AND tr1.operating_date = tr2.operating_date
+             LEFT JOIN active_trains at ON at.train_number = tr1.train_number AND at.operating_date = tr1.operating_date
+             WHERE tr1.operating_date = ? AND tr1.stop_id = ? AND tr2.stop_id = ?
+               AND tr1.stop_sequence < tr2.stop_sequence
+             ORDER BY tr1.departure_time LIMIT 5`
+          ).bind(today, lastStop.stopId, dest.stationId).all();
+
+          const alternatives = (altRows.results || []).map((r: any) => ({
+            trainNumber: r.train_number, carrier: r.carrier || '',
+            departureTime: r.departure_time, arrivalTime: r.arrival_time,
+            isDelayed: (r.is_delayed as number) === 1, maxDelay: (r.max_delay as number) || 0,
+          }));
+
+          data = {
+            type: 'connection', train: trainInfo, destination: dest, route,
+            transfer: { stationName: lastStop.stationName, stationId: lastStop.stopId, trainArrival: lastStop.arrivalTime },
+            alternatives,
+            message: `Pociąg ${trainNumber} nie jedzie do ${dest.stationName}. Kończy trasę w ${lastStop.stationName}.`,
+          };
+        }
+      }
+    }
+  }
+} catch (err) {
+  console.error('[wynik] Error:', err);
+  fetchError = 'Nie udało się sprawdzić połączenia';
+}
+
+const isDirect = data?.type === 'direct';
+const isConnection = data?.type === 'connection';
+const notFound = data?.type === 'not_found';
+const noRoute = data?.type === 'no_route';
+
+const train = data?.train;
+const dest = data?.destination;
+const route = data?.route || [];
+const transfer = data?.transfer;
+const alternatives = data?.alternatives || [];
+const directInfo = data?.direct;
 ---
-<Base title="Demo — Monitoring przesiadek (w przygotowaniu)" description="Podgląd interfejsu monitoringu przesiadek. Pełna funkcjonalność będzie dostępna wkrótce. Dane przykładowe nie odzwierciedlają rzeczywistych opóźnień pociągów.">
+<Base
+  title={isDirect
+    ? `${train?.trainNumber} → ${dest?.stationName} — bezpośredni`
+    : isConnection
+      ? `${train?.trainNumber} → ${dest?.stationName} — przesiadka`
+      : 'Sprawdź połączenie — niejedzie.pl'}
+  description={data?.message || 'Sprawdź czy Twój pociąg jedzie do celu'}
+>
 
-  <!-- Demo disclaimer -->
-  <section class="bg-delay-danger text-white">
-    <div class="max-w-4xl mx-auto px-4 py-3">
-      <div class="text-center">
-        <span class="font-ticket text-xs font-bold tracking-wider uppercase">⚠️ TRYB DEMONSTRACYJNY</span>
-        <p class="text-sm mt-1">To są dane przykładowe, nie rzeczywiste opóźnienia pociągów. Pełna funkcjonalność wkrótce.</p>
-      </div>
-    </div>
-  </section>
-
-  <!-- Result header -->
-  <section class="bg-surface-dark border-b border-border">
-    <div class="max-w-4xl mx-auto px-4 pt-8 pb-10">
-      <div class="max-w-lg mx-auto">
-        <div class="flex items-center gap-2 mb-4">
-          <a href="/" class="text-ink-faint hover:text-white transition-colors text-sm">&larr; Nowa przesiadka</a>
-        </div>
-        <h1 class="text-xl md:text-2xl font-bold text-white mb-1">
-          {demoTrain1.number} &rarr; {demoTrain2.number} (DEMO)
+  {/* Error / not found state */}
+  {(notFound || noRoute || fetchError) && (
+    <section class="max-w-4xl mx-auto px-4 py-20 text-center">
+      <div class="max-w-md mx-auto">
+        <p class="text-5xl mb-6">🚂</p>
+        <h1 class="text-xl font-bold text-ink mb-3">
+          {fetchError || data?.message || 'Nie znaleziono połączenia'}
         </h1>
-        <p class="text-ink-faint text-sm">
-          {demoTrain1.from} &rarr; {demoTrain2.to} &middot; Przesiadka w {demoTransfer.station}
+        <p class="text-ink-muted text-sm mb-8">
+          {noRoute
+            ? 'Dane o trasie tego pociągu nie są jeszcze dostępne. Spróbuj ponownie za kilka minut.'
+            : 'Sprawdź numer pociągu i nazwę stacji docelowej.'}
         </p>
-        <p class="font-ticket text-[0.625rem] text-brand-300/60 uppercase tracking-widest mt-2">// wersja demo — dane przykładowe</p>
+        <a href="/" class="btn-primary inline-block px-8">Spróbuj ponownie</a>
       </div>
-    </div>
-  </section>
+    </section>
+  )}
 
-  <!-- Main result card -->
-  <section class="max-w-4xl mx-auto px-4 -mt-4">
-    <div class="max-w-lg mx-auto">
-      <div class="bg-surface-raised rounded-2xl border border-border overflow-hidden shadow-lg">
-
-        <!-- Train 1 -->
-        <div class="p-5">
-          <div class="flex items-center justify-between mb-2">
-            <div class="flex items-center gap-2.5">
-              <span class="text-sm font-bold text-ink">{demoTrain1.number}</span>
-              <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand-100 text-delay-warn">+{demoTrain1.delay} min</span>
-            </div>
-            <span class="text-xs text-ink-faint">Pociąg 1</span>
-          </div>
-          <div class="text-sm text-ink-secondary mb-1">{demoTrain1.from} &rarr; {demoTrain1.to}</div>
-          <div class="flex items-center gap-3 text-sm">
-            <span class="text-ink-faint">Przyjazd:</span>
-            <span class="line-through text-ink-faint">{demoTrain1.scheduledArrival}</span>
-            <span class="font-semibold text-delay-warn">~{demoTrain1.estimatedArrival}</span>
-          </div>
-        </div>
-
-        <!-- Transfer time indicator -->
-        <div class="px-5 py-4 bg-surface-sunken border-y border-border">
-          <div class="flex items-center justify-between mb-2.5">
-            <div class="text-sm text-ink-secondary">
-              Przesiadka w <span class="font-semibold text-ink">{demoTransfer.station}</span>
-            </div>
-            <div class="text-sm">
-              {bufferColor === 'green' && <span class="font-bold text-green-600">{demoTransfer.currentBuffer} min</span>}
-              {bufferColor === 'amber' && <span class="font-bold text-delay-warn">{demoTransfer.currentBuffer} min</span>}
-              {bufferColor === 'red' && <span class="font-bold text-red-600">{demoTransfer.currentBuffer} min</span>}
-              <span class="text-ink-faint"> z {demoTransfer.plannedBuffer} min</span>
-            </div>
-          </div>
-
-          <!-- Visual buffer bar -->
-          <div class="relative h-3 bg-surface-sunken rounded-full overflow-hidden">
-            <div
-              class:list={[
-                'absolute inset-y-0 left-0 rounded-full transition-all',
-                bufferColor === 'green' && 'bg-green-500',
-                bufferColor === 'amber' && 'bg-brand-500',
-                bufferColor === 'red' && 'bg-red-500',
-              ]}
-              style={`width: ${bufferUsedPercent}%`}
-            ></div>
-          </div>
-          <div class="flex justify-between mt-1.5 text-xs text-ink-faint">
-            <span>Bezpiecznie</span>
-            <span>Ryzyko</span>
-          </div>
-
-          <!-- Warning message -->
-          {demoTransfer.currentBuffer <= 15 && demoTransfer.currentBuffer > 5 && (
-            <div class="mt-3 flex items-start gap-2 p-2.5 bg-brand-50 border border-brand-200 rounded-lg">
-              <span class="text-delay-warn text-base leading-none mt-0.5">&#9888;</span>
-              <p class="text-xs text-delay-warn">
-                Bufor się zmniejsza. Jeśli opóźnienie wzrośnie do ~{demoTransfer.plannedBuffer} min, nie zdążysz na przesiadkę.
-              </p>
-            </div>
-          )}
-          {demoTransfer.currentBuffer <= 5 && (
-            <div class="mt-3 flex items-start gap-2 p-2.5 bg-red-50 border border-red-200 rounded-lg">
-              <span class="text-red-500 text-base leading-none mt-0.5">&#9888;</span>
-              <p class="text-xs text-red-700">
-                <strong>Przesiadka zagrożona!</strong> Zostało bardzo mało czasu. Rozważ alternatywne połączenie.
-              </p>
-            </div>
-          )}
-        </div>
-
-        <!-- Train 2 -->
-        <div class="p-5">
-          <div class="flex items-center justify-between mb-2">
-            <div class="flex items-center gap-2.5">
-              <span class="text-sm font-bold text-ink">{demoTrain2.number}</span>
-              <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">Punktualnie</span>
-            </div>
-            <span class="text-xs text-ink-faint">Pociąg 2</span>
-          </div>
-          <div class="text-sm text-ink-secondary mb-1">{demoTrain2.from} &rarr; {demoTrain2.to}</div>
-          <div class="flex items-center gap-3 text-sm">
-            <span class="text-ink-faint">Odjazd:</span>
-            <span class="font-semibold text-ink">{demoTrain2.scheduledDeparture}</span>
-          </div>
-        </div>
-
-        <!-- PRIMARY CTA — Monthly subscription (recommended) -->
-        <div class="p-5 bg-brand-50 border-t-2 border-brand-400">
-          <h2 class="text-base font-bold text-ink mb-4 text-center">Monitoruj tę przesiadkę</h2>
-
-          <!-- Monthly — highlighted as best deal -->
-          <div class="bg-surface-raised rounded-xl border-2 border-brand-400 p-4 mb-3 relative">
-            <div class="absolute -top-2.5 left-4">
-              <span class="font-ticket text-[0.5625rem] font-semibold tracking-wider uppercase bg-brand-500 text-white px-2.5 py-0.5 rounded">Polecany</span>
-            </div>
-            <div class="flex items-center justify-between mb-2.5">
-              <div>
-                <p class="text-sm font-bold text-ink">Plan miesięczny</p>
-                <p class="text-xs text-ink-muted">Nielimitowane przesiadki + dodatkowe funkcje</p>
-              </div>
-              <div class="text-right">
-                <span class="font-ticket text-lg font-bold text-ink">{PRICES.MONTHLY}</span>
-                <span class="text-xs text-ink-faint">/msc</span>
-              </div>
-            </div>
-            <button onclick="checkout('subscription')" class="w-full py-3 bg-brand-500 hover:bg-brand-600 text-white font-bold rounded-xl transition-colors text-sm shadow-md shadow-brand-500/20">
-              Włącz plan miesięczny
-            </button>
-            <div class="flex flex-wrap gap-x-4 gap-y-1 mt-2.5">
-              <span class="flex items-center gap-1 text-xs text-ink-muted">
-                <span class="text-brand-500 font-bold">&#10003;</span> Bez limitu przesiadek
-              </span>
-              <span class="flex items-center gap-1 text-xs text-ink-muted">
-                <span class="text-brand-500 font-bold">&#10003;</span> Priorytetowe alerty
-              </span>
-              <span class="flex items-center gap-1 text-xs text-ink-muted">
-                <span class="text-brand-500 font-bold">&#10003;</span> Historia tras
-              </span>
-              <span class="flex items-center gap-1 text-xs text-ink-muted">
-                <span class="text-brand-500 font-bold">&#10003;</span> Pomoc z reklamacją
-              </span>
-            </div>
-            <p class="text-[0.6875rem] text-ink-faint mt-2">Anulujesz kiedy chcesz. Bez zobowiązań.</p>
-          </div>
-
-          <!-- One-time — secondary option -->
-          <div class="bg-surface-sunken rounded-xl border border-border p-4">
-            <div class="flex items-center justify-between mb-2.5">
-              <div>
-                <p class="text-sm font-medium text-ink-secondary">Tylko ta przesiadka</p>
-                <p class="text-xs text-ink-faint">Jednorazowy monitoring</p>
-              </div>
-              <div class="text-right">
-                <span class="font-ticket text-lg font-bold text-ink-secondary">{PRICES.ONE_TIME}</span>
-              </div>
-            </div>
-            <button onclick="checkout('payment')" class="w-full py-2.5 bg-surface-raised hover:bg-surface-sunken text-ink-secondary font-semibold rounded-xl transition-colors text-sm border border-border-strong">
-              Kup jednorazowo — {PRICES.ONE_TIME}
-            </button>
-          </div>
-
-          <!-- Nudge toward monthly -->
-          <div class="mt-3 text-center">
-            <p class="text-xs text-ink-muted">
-              Podróżujesz regularnie? <a href="/premium" class="text-brand-600 font-semibold hover:underline">Plan miesięczny</a> = nielimitowane przesiadki za cenę trzech jednorazowych.
+  {/* Direct train result */}
+  {isDirect && (
+    <Fragment>
+      <section class="bg-surface-dark border-b border-border">
+        <div class="max-w-4xl mx-auto px-4 pt-8 pb-10">
+          <div class="max-w-lg mx-auto">
+            <a href="/" class="text-ink-faint hover:text-white transition-colors text-sm">&larr; Nowe wyszukiwanie</a>
+            <h1 class="text-xl md:text-2xl font-bold text-white mt-4 mb-1">
+              {train.trainNumber} → {dest.stationName}
+            </h1>
+            <p class="font-ticket text-[0.625rem] text-brand-300 uppercase tracking-widest">
+              // połączenie bezpośrednie
             </p>
           </div>
         </div>
-      </div>
-    </div>
-  </section>
+      </section>
 
-  <!-- Historical reliability -->
-  <section class="max-w-4xl mx-auto px-4 py-12">
-    <div class="max-w-lg mx-auto">
-      <h2 class="text-sm font-semibold text-ink-faint uppercase tracking-wider mb-5">Statystyki tej trasy</h2>
+      <section class="max-w-4xl mx-auto px-4 -mt-4">
+        <div class="max-w-lg mx-auto">
+          <div class="bg-surface-raised rounded-2xl border border-border overflow-hidden shadow-lg">
+            {/* Train info */}
+            <div class="p-5">
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2.5">
+                  <span class="text-sm font-bold text-ink">{train.trainNumber}</span>
+                  <span class="text-xs text-ink-faint">{train.carrier}</span>
+                  {train.isDelayed
+                    ? <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand-100 text-delay-warn">+{train.maxDelay} min</span>
+                    : <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">Punktualnie</span>
+                  }
+                </div>
+              </div>
 
-      <div class="grid grid-cols-2 gap-3">
-        <div class="bg-surface-raised rounded-xl border border-border p-4">
-          <div class="text-xs text-ink-faint mb-1">Punktualność {demoTrain1.number}</div>
-          <div class="text-xl font-bold text-ink">64%</div>
-          <div class="text-xs text-ink-faint mt-0.5">ostatnie 30 dni</div>
-        </div>
-        <div class="bg-surface-raised rounded-xl border border-border p-4">
-          <div class="text-xs text-ink-faint mb-1">Średnie opóźnienie</div>
-          <div class="text-xl font-bold text-delay-warn">+12 min</div>
-          <div class="text-xs text-ink-faint mt-0.5">na tej trasie</div>
-        </div>
-        <div class="bg-surface-raised rounded-xl border border-border p-4">
-          <div class="text-xs text-ink-faint mb-1">Udane przesiadki</div>
-          <div class="text-xl font-bold text-green-600">82%</div>
-          <div class="text-xs text-ink-faint mt-0.5">z buforem 30 min</div>
-        </div>
-        <div class="bg-surface-raised rounded-xl border border-border p-4">
-          <div class="text-xs text-ink-faint mb-1">Punktualność {demoTrain2.number}</div>
-          <div class="text-xl font-bold text-ink">89%</div>
-          <div class="text-xs text-ink-faint mt-0.5">ostatnie 30 dni</div>
-        </div>
-      </div>
+              <div class="mt-4 flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-xl">
+                <div>
+                  <p class="text-sm font-semibold text-green-800">Jedzie bezpośrednio do {dest.stationName}</p>
+                  <p class="text-xs text-green-600 mt-0.5">Nie potrzebujesz przesiadki</p>
+                </div>
+                {directInfo.arrivalTime && (
+                  <div class="text-right">
+                    <p class="text-xs text-green-600">Przyjazd</p>
+                    <p class="font-ticket text-lg font-bold text-green-800">{directInfo.arrivalTime}</p>
+                  </div>
+                )}
+              </div>
+            </div>
 
-      <p class="text-xs text-ink-faint mt-3 text-center">
-        Dane historyczne z systemu PKP PLK Otwarte Dane Kolejowe
+            {/* Route timeline */}
+            {route.length > 0 && (
+              <div class="px-5 pb-5">
+                <p class="section-label text-ink-faint mb-3">Trasa pociągu</p>
+                <div class="space-y-0">
+                  {route.map((stop: any, i: number) => {
+                    const isFirst = i === 0;
+                    const isLast = i === route.length - 1;
+                    const isDest = stop.stopId === dest.stationId;
+                    return (
+                      <div class:list={[
+                        'flex items-center gap-3 py-1.5 text-sm',
+                        isDest && 'bg-green-50 -mx-2 px-2 rounded-lg font-semibold',
+                      ]}>
+                        <span class:list={[
+                          'w-2 h-2 rounded-full flex-shrink-0',
+                          isDest ? 'bg-green-500' : 'bg-border-strong',
+                        ]}></span>
+                        <span class:list={['flex-1 truncate', isDest ? 'text-green-800' : 'text-ink-secondary']}>
+                          {stop.stationName || `Stacja #${stop.stopId}`}
+                        </span>
+                        <span class="font-ticket text-xs text-ink-faint w-12 text-right">
+                          {isFirst ? stop.departureTime : (isLast ? stop.arrivalTime : (stop.arrivalTime || stop.departureTime))}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* CTA — monitoring */}
+            <div class="p-5 bg-brand-50 border-t-2 border-brand-400">
+              <h2 class="text-base font-bold text-ink mb-2 text-center">Chcesz dostać alert o opóźnieniu?</h2>
+              <p class="text-xs text-ink-muted text-center mb-4">Monitorujemy Twój pociąg i wyślemy powiadomienie push jeśli się spóźni.</p>
+              <button onclick="checkout('subscription')" class="w-full py-3 bg-brand-500 hover:bg-brand-600 text-white font-bold rounded-xl transition-colors text-sm shadow-md shadow-brand-500/20">
+                Włącz monitoring — {PRICES.MONTHLY_PER}
+              </button>
+              <p class="text-[0.6875rem] text-ink-faint mt-2 text-center">Anulujesz kiedy chcesz. Bez zobowiązań.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </Fragment>
+  )}
+
+  {/* Connection needed result */}
+  {isConnection && (
+    <Fragment>
+      <section class="bg-surface-dark border-b border-border">
+        <div class="max-w-4xl mx-auto px-4 pt-8 pb-10">
+          <div class="max-w-lg mx-auto">
+            <a href="/" class="text-ink-faint hover:text-white transition-colors text-sm">&larr; Nowe wyszukiwanie</a>
+            <h1 class="text-xl md:text-2xl font-bold text-white mt-4 mb-1">
+              {train.trainNumber} → {dest.stationName}
+            </h1>
+            <p class="text-ink-faint text-sm">
+              Przesiadka w {transfer.stationName}
+            </p>
+            <p class="font-ticket text-[0.625rem] text-brand-300 uppercase tracking-widest mt-2">
+              // potrzebna przesiadka
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section class="max-w-4xl mx-auto px-4 -mt-4">
+        <div class="max-w-lg mx-auto">
+          <div class="bg-surface-raised rounded-2xl border border-border overflow-hidden shadow-lg">
+
+            {/* Train 1 */}
+            <div class="p-5">
+              <div class="flex items-center justify-between mb-2">
+                <div class="flex items-center gap-2.5">
+                  <span class="text-sm font-bold text-ink">{train.trainNumber}</span>
+                  <span class="text-xs text-ink-faint">{train.carrier}</span>
+                  {train.isDelayed
+                    ? <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand-100 text-delay-warn">+{train.maxDelay} min</span>
+                    : <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">Punktualnie</span>
+                  }
+                </div>
+                <span class="text-xs text-ink-faint">Twój pociąg</span>
+              </div>
+              <div class="text-sm text-ink-secondary">
+                {route.length > 0 && (
+                  <span>{route[0].stationName} → {transfer.stationName}</span>
+                )}
+              </div>
+              {transfer.trainArrival && (
+                <div class="flex items-center gap-3 text-sm mt-1">
+                  <span class="text-ink-faint">Przyjazd:</span>
+                  <span class="font-semibold text-ink">{transfer.trainArrival}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Transfer indicator */}
+            <div class="px-5 py-4 bg-surface-sunken border-y border-border">
+              <div class="flex items-center gap-2">
+                <span class="text-brand-500 font-bold text-lg">↓</span>
+                <div>
+                  <p class="text-sm font-semibold text-ink">Przesiadka w {transfer.stationName}</p>
+                  <p class="text-xs text-ink-faint">Ten pociąg kończy trasę tutaj</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Alternative trains */}
+            <div class="p-5">
+              <p class="section-label text-ink-muted mb-3">
+                Pociągi z {transfer.stationName} do {dest.stationName}
+              </p>
+
+              {alternatives.length > 0 ? (
+                <div class="space-y-2">
+                  {alternatives.map((alt: any) => (
+                    <div class="flex items-center justify-between p-3 bg-surface-sunken rounded-lg border border-border">
+                      <div>
+                        <span class="text-sm font-semibold text-ink">{alt.trainNumber}</span>
+                        {alt.carrier && <span class="text-xs text-ink-faint ml-1.5">{alt.carrier}</span>}
+                        {alt.departureTime && (
+                          <span class="text-xs text-ink-faint ml-2">odj. {alt.departureTime}</span>
+                        )}
+                        {alt.arrivalTime && (
+                          <span class="text-xs text-ink-faint ml-1">→ przyj. {alt.arrivalTime}</span>
+                        )}
+                      </div>
+                      {alt.isDelayed
+                        ? <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-brand-100 text-delay-warn">+{alt.maxDelay} min</span>
+                        : <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Punktualnie</span>
+                      }
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p class="text-sm text-ink-faint">Nie znaleziono połączeń z {transfer.stationName} do {dest.stationName} na dziś.</p>
+              )}
+            </div>
+
+            {/* CTA — monitoring */}
+            <div class="p-5 bg-brand-50 border-t-2 border-brand-400">
+              <h2 class="text-base font-bold text-ink mb-2 text-center">Monitoruj tę przesiadkę</h2>
+              <p class="text-xs text-ink-muted text-center mb-4">Dostaniesz alert jeśli opóźnienie zagrozi połączeniu.</p>
+
+              <div class="bg-surface-raised rounded-xl border-2 border-brand-400 p-4 mb-3 relative">
+                <div class="absolute -top-2.5 left-4">
+                  <span class="font-ticket text-[0.5625rem] font-semibold tracking-wider uppercase bg-brand-500 text-white px-2.5 py-0.5 rounded">Polecany</span>
+                </div>
+                <div class="flex items-center justify-between mb-2.5">
+                  <div>
+                    <p class="text-sm font-bold text-ink">Plan miesięczny</p>
+                    <p class="text-xs text-ink-muted">Nielimitowane przesiadki</p>
+                  </div>
+                  <div class="text-right">
+                    <span class="font-ticket text-lg font-bold text-ink">{PRICES.MONTHLY}</span>
+                    <span class="text-xs text-ink-faint">/msc</span>
+                  </div>
+                </div>
+                <button onclick="checkout('subscription')" class="w-full py-3 bg-brand-500 hover:bg-brand-600 text-white font-bold rounded-xl transition-colors text-sm shadow-md shadow-brand-500/20">
+                  Włącz plan miesięczny
+                </button>
+              </div>
+
+              <div class="bg-surface-sunken rounded-xl border border-border p-4">
+                <div class="flex items-center justify-between mb-2.5">
+                  <div>
+                    <p class="text-sm font-medium text-ink-secondary">Tylko ta przesiadka</p>
+                    <p class="text-xs text-ink-faint">Jednorazowy monitoring</p>
+                  </div>
+                  <span class="font-ticket text-lg font-bold text-ink-secondary">{PRICES.ONE_TIME}</span>
+                </div>
+                <button onclick="checkout('payment')" class="w-full py-2.5 bg-surface-raised hover:bg-surface-sunken text-ink-secondary font-semibold rounded-xl transition-colors text-sm border border-border-strong">
+                  Kup jednorazowo — {PRICES.ONE_TIME}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </Fragment>
+  )}
+
+  {/* Bottom CTA */}
+  {(isDirect || isConnection) && (
+    <section class="max-w-4xl mx-auto px-4 py-14 text-center">
+      <p class="text-xs text-ink-faint">
+        Dane z systemu GTFS-RT &middot; Odświeżane co kilka minut
       </p>
-    </div>
-  </section>
+    </section>
+  )}
 
-  <!-- Alternative connections -->
-  <section class="bg-surface-raised border-y border-border">
-    <div class="max-w-4xl mx-auto px-4 py-10">
-      <div class="max-w-lg mx-auto">
-        <h2 class="text-sm font-semibold text-ink-faint uppercase tracking-wider mb-5">Następne pociągi do {demoTrain2.to.split(' ')[0]}</h2>
+  <script is:inline
+    data-train={train?.trainNumber || ''}
+    data-dest={dest?.stationName || ''}
+    data-transfer={transfer?.stationName || ''}
+    data-alt={alternatives?.[0]?.trainNumber || ''}
+    data-type={isDirect ? 'direct' : 'connection'}
+  >
+    var _s = document.currentScript;
+    var _trainData = {
+      trainA: _s.dataset.train,
+      destination: _s.dataset.dest,
+      transferStation: _s.dataset.transfer,
+      trainB: _s.dataset.alt,
+      type: _s.dataset.type,
+    };
 
-        <div class="space-y-2">
-          <div class="flex items-center justify-between p-3 bg-surface-sunken rounded-lg border border-border">
-            <div>
-              <span class="text-sm font-semibold text-ink-secondary">EIC 1703</span>
-              <span class="text-xs text-ink-faint ml-2">15:20 z Warszawa Centralna</span>
-            </div>
-            <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Punktualnie</span>
-          </div>
-          <div class="flex items-center justify-between p-3 bg-surface-sunken rounded-lg border border-border">
-            <div>
-              <span class="text-sm font-semibold text-ink-secondary">TLK 83100</span>
-              <span class="text-xs text-ink-faint ml-2">15:48 z Warszawa Centralna</span>
-            </div>
-            <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-brand-100 text-delay-warn">+5 min</span>
-          </div>
-          <div class="flex items-center justify-between p-3 bg-surface-sunken rounded-lg border border-border">
-            <div>
-              <span class="text-sm font-semibold text-ink-secondary">IC 6302</span>
-              <span class="text-xs text-ink-faint ml-2">16:30 z Warszawa Centralna</span>
-            </div>
-            <span class="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Punktualnie</span>
-          </div>
-        </div>
-
-        <p class="text-xs text-ink-faint mt-3">
-          Jeśli nie zdążysz na przesiadkę, te pociągi jadą w tym samym kierunku.
-        </p>
-      </div>
-    </div>
-  </section>
-
-  <!-- Bottom CTA — push monthly -->
-  <section class="max-w-4xl mx-auto px-4 py-14 text-center">
-    <h2 class="text-xl font-bold text-ink mb-2">Nie chcesz o tym myśleć?</h2>
-    <p class="text-ink-muted text-sm mb-5 max-w-md mx-auto">
-      Z planem miesięcznym monitorujemy <strong>każdą</strong> Twoją przesiadkę. Bez limitu, bez stresu.
-    </p>
-    <div class="flex flex-col sm:flex-row gap-3 justify-center">
-      <a href="/premium" class="px-8 py-3 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-xl transition-colors text-sm shadow-md shadow-brand-500/20">
-        Plan miesięczny — {PRICES.MONTHLY_PER}
-      </a>
-      <button onclick="checkout('payment')" class="px-6 py-3 bg-surface-raised hover:bg-surface-sunken text-ink-secondary font-medium rounded-xl transition-colors text-sm border border-border-strong">
-        Tylko ta przesiadka — {PRICES.ONE_TIME}
-      </button>
-    </div>
-    <p class="text-xs text-ink-faint mt-3">3 przesiadki w miesiącu? Plan miesięczny już się opłaca.</p>
-  </section>
-
-  <script is:inline>
     async function checkout(mode) {
-      const res = await fetch('/api/checkout/create', {
+      var body = { mode: mode };
+      if (_trainData.type === 'connection') {
+        body.trainA = _trainData.trainA;
+        body.trainB = _trainData.trainB;
+        body.transferStation = _trainData.transferStation;
+      } else {
+        body.trainA = _trainData.trainA;
+        body.destination = _trainData.destination;
+      }
+      var res = await fetch('/api/checkout/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode }),
+        body: JSON.stringify(body),
       });
-      const data = await res.json();
+      var data = await res.json();
       if (data.url) {
         window.location.href = data.url;
       } else {

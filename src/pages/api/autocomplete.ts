@@ -9,6 +9,7 @@
 export const prerender = false;
 import type { APIRoute } from 'astro';
 import { env } from 'cloudflare:workers';
+import { getPolandDate } from '../../lib/time-utils';
 
 interface Suggestion {
   text: string;
@@ -73,6 +74,28 @@ export const GET: APIRoute = async ({ url }) => {
               : undefined,
           });
         }
+      }
+
+      // Also check active_trains (GTFS-RT roster) for on-time trains
+      const today = getPolandDate();
+
+      const activeTrains = await env.DB.prepare(`
+        SELECT DISTINCT train_number, carrier
+        FROM active_trains
+        WHERE operating_date = ? AND (train_number LIKE ? OR train_number_numeric LIKE ?)
+        ORDER BY train_number_numeric
+        LIMIT 15
+      `).bind(today, `${q}%`, `${q}%`).all();
+
+      const existingNums = new Set(suggestions.filter(s => s.type === 'train').map(s => s.text));
+      for (const t of activeTrains.results) {
+        const num = t.train_number as string;
+        if (existingNums.has(num)) continue;
+        suggestions.push({
+          text: num,
+          type: 'train',
+          detail: (t.carrier as string) || (t.agency_id as string) || undefined,
+        });
       }
     }
 

@@ -1,0 +1,175 @@
+---
+export const prerender = false;
+import Base from '../../layouts/Base.astro';
+import { getPolandDate } from '../../lib/time-utils';
+import { env } from 'cloudflare:workers';
+
+const { train: trainSlug } = Astro.params;
+if (!trainSlug) return Astro.redirect('/gdzie-jest-pociag');
+
+const today = getPolandDate();
+const numericPart = trainSlug.replace(/^(IC|EIC|EIP|TLK|KS|KM|SKM|R|RE|IR|EN)-?/i, '').trim();
+
+// Find train in active_trains
+const trainRow = await env.DB.prepare(
+  `SELECT train_number, carrier, is_delayed, max_delay
+   FROM active_trains
+   WHERE operating_date = ? AND (train_number LIKE ? OR train_number_numeric LIKE ?)
+   LIMIT 1`
+).bind(today, `%${numericPart}%`, `%${numericPart}%`).first();
+
+// Get route from train_routes
+let route: any[] = [];
+if (trainRow) {
+  const routeRows = await env.DB.prepare(
+    `SELECT tr.stop_sequence, tr.stop_id, tr.arrival_time, tr.departure_time, s.name AS station_name
+     FROM train_routes tr
+     LEFT JOIN stations s ON s.station_id = tr.stop_id
+     WHERE tr.operating_date = ? AND tr.train_number = ?
+     ORDER BY tr.stop_sequence`
+  ).bind(today, trainRow.train_number as string).all();
+  route = routeRows.results || [];
+}
+
+// Get delay data from delay_snapshots if delayed
+let delayData: any[] = [];
+if (trainRow && (trainRow.is_delayed as number) === 1) {
+  // Search trains table for schedule_id
+  const schedRow = await env.DB.prepare(
+    `SELECT schedule_id, order_id FROM trains WHERE train_number LIKE ? LIMIT 1`
+  ).bind(`%${numericPart}%`).first();
+
+  if (schedRow) {
+    const snapRows = await env.DB.prepare(
+      `SELECT station_name, planned_arrival, planned_departure, actual_arrival, actual_departure,
+              arrival_delay, departure_delay, sequence_num
+       FROM delay_snapshots
+       WHERE schedule_id = ? AND order_id = ? AND operating_date = ?
+       ORDER BY sequence_num ASC, recorded_at DESC`
+    ).bind(schedRow.schedule_id, schedRow.order_id, today).all();
+    delayData = snapRows.results || [];
+  }
+}
+
+const trainNumber = (trainRow?.train_number as string) || trainSlug;
+const carrier = (trainRow?.carrier as string) || '';
+const isDelayed = (trainRow?.is_delayed as number) === 1;
+const maxDelay = (trainRow?.max_delay as number) || 0;
+const notFound = !trainRow;
+const noRoute = trainRow && route.length === 0;
+
+// Build title
+const firstStation = route[0]?.station_name || '';
+const lastStation = route[route.length - 1]?.station_name || '';
+const routeLabel = firstStation && lastStation ? `${firstStation} → ${lastStation}` : '';
+---
+<Base
+  title={notFound
+    ? `Pociąg ${trainSlug} — niejedzie.pl`
+    : `${trainNumber} ${routeLabel} — rozkład i opóźnienia`}
+  description={notFound
+    ? `Nie znaleziono pociągu ${trainSlug}`
+    : `Pociąg ${trainNumber} ${carrier} — trasa ${routeLabel}. Sprawdź aktualny rozkład jazdy i opóźnienia na żywo.`}
+>
+
+  {notFound && (
+    <section class="max-w-4xl mx-auto px-4 py-20 text-center">
+      <p class="text-5xl mb-6">🚂</p>
+      <h1 class="text-xl font-bold text-ink mb-3">Nie znaleziono pociągu „{trainSlug}"</h1>
+      <p class="text-ink-muted text-sm mb-8">Sprawdź numer pociągu lub wyszukaj ponownie.</p>
+      <a href="/gdzie-jest-pociag" class="btn-primary inline-block px-8">Szukaj pociągu</a>
+    </section>
+  )}
+
+  {!notFound && (
+    <Fragment>
+      {/* Header */}
+      <section class="bg-surface-dark border-b border-border">
+        <div class="max-w-4xl mx-auto px-4 pt-8 pb-10">
+          <div class="max-w-lg mx-auto">
+            <a href="/gdzie-jest-pociag" class="text-ink-faint hover:text-white transition-colors text-sm">&larr; Szukaj pociągu</a>
+            <div class="flex items-center gap-3 mt-4 mb-1">
+              <h1 class="text-xl md:text-2xl font-bold text-white">{trainNumber}</h1>
+              {isDelayed
+                ? <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand-100 text-delay-warn">+{maxDelay} min</span>
+                : <span class="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700">Punktualnie</span>
+              }
+            </div>
+            {carrier && <p class="text-ink-faint text-sm">{carrier}</p>}
+            {routeLabel && <p class="text-white/70 text-sm mt-1">{routeLabel}</p>}
+          </div>
+        </div>
+      </section>
+
+      {/* Route timeline */}
+      <section class="max-w-4xl mx-auto px-4 py-8">
+        <div class="max-w-lg mx-auto">
+          {noRoute ? (
+            <div class="bg-surface-raised rounded-2xl border border-border p-6 text-center">
+              <p class="text-ink-muted text-sm">Brak danych o trasie tego pociągu na dziś.</p>
+            </div>
+          ) : (
+            <div class="bg-surface-raised rounded-2xl border border-border overflow-hidden">
+              <div class="px-5 pt-5 pb-2">
+                <p class="section-label text-ink-faint">Trasa pociągu — {today}</p>
+              </div>
+              <div class="px-5 pb-5">
+                <div class="space-y-0">
+                  {route.map((stop: any, i: number) => {
+                    const isFirst = i === 0;
+                    const isLast = i === route.length - 1;
+                    const name = (stop.station_name as string) || `Stacja #${stop.stop_id}`;
+                    const arr = stop.arrival_time as string | null;
+                    const dep = stop.departure_time as string | null;
+                    const time = isFirst ? dep : (isLast ? arr : (arr || dep));
+
+                    // Check for delay data
+                    const delayRow = delayData.find((d: any) => {
+                      const dName = (d.station_name as string) || '';
+                      return dName === name || (d.sequence_num as number) === (stop.stop_sequence as number);
+                    });
+                    const delay = delayRow
+                      ? Math.max((delayRow.arrival_delay as number) || 0, (delayRow.departure_delay as number) || 0)
+                      : 0;
+                    const actualArr = delayRow?.actual_arrival as string | null;
+                    const actualDep = delayRow?.actual_departure as string | null;
+
+                    return (
+                      <div class="flex items-center gap-3 py-2 text-sm border-b border-border/50 last:border-0">
+                        <div class="flex flex-col items-center w-4 flex-shrink-0">
+                          <span class:list={[
+                            'w-2.5 h-2.5 rounded-full',
+                            delay > 0 ? 'bg-brand-500' : 'bg-green-500',
+                            (isFirst || isLast) && 'w-3 h-3',
+                          ]}></span>
+                        </div>
+                        <span class="flex-1 truncate text-ink-secondary">{name}</span>
+                        <div class="text-right flex-shrink-0">
+                          <span class="font-ticket text-xs text-ink-faint">{time || '–'}</span>
+                          {delay > 0 && (
+                            <span class="font-ticket text-xs text-delay-warn ml-2">+{delay}</span>
+                          )}
+                          {actualArr && delay > 0 && (
+                            <span class="font-ticket text-xs text-ink-faint ml-1">(~{actualArr})</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* CTA */}
+      <section class="max-w-4xl mx-auto px-4 pb-12 text-center">
+        <p class="text-xs text-ink-faint">
+          Dane z systemu GTFS · Odświeżane codziennie
+        </p>
+      </section>
+    </Fragment>
+  )}
+
+</Base>

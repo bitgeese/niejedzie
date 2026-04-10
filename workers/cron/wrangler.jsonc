@@ -2,9 +2,6 @@
 	"name": "niejedzie-cron",
 	"main": "src/index.ts",
 	"compatibility_date": "2026-03-17",
-	"vars": {
-		"DATA_SOURCE": "auto"
-	},
 	"d1_databases": [
 		{
 			"binding": "DB",
@@ -19,6 +16,6 @@
 		}
 	],
 	"triggers": {
-		"crons": ["*/2 * * * *", "*/5 * * * *", "0 2 * * *"]
+		"crons": ["*/5 * * * *", "0 2 * * *"]
 	}
 }
