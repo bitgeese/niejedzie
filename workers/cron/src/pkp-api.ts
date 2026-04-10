@@ -157,7 +157,7 @@ export async function fetchAllOperations(
       {
         fullRoutes: "true",
         withPlanned: "true",
-        pageNumber: String(page),
+        page: String(page),
         pageSize: String(pageSize),
       },
     );
@@ -209,7 +209,7 @@ export async function fetchAllSchedules(
         dateFrom: date,
         dateTo: date,
         dictionaries: "true",
-        pageNumber: String(page),
+        page: String(page),
         pageSize: String(pageSize),
       },
     );
