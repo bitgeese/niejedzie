@@ -499,11 +499,9 @@ async function pollOperations(env: Env): Promise<void> {
 // syncDaily — runs at 02:00
 // ---------------------------------------------------------------------------
 
-async function syncDaily(env: Env): Promise<void> {
-	const today = todayDateStr();
-	console.log(`[syncDaily] Starting daily sync for ${today}`);
+async function syncSchedulesForDate(env: Env, date: string): Promise<number> {
+	console.log(`[syncSchedules] Syncing schedules for ${date}`);
 
-	// Prepared statements (reused across pages)
 	const trainUpsertStmt = env.DB.prepare(`
 		INSERT OR REPLACE INTO trains
 			(schedule_id, order_id, train_number, carrier, category, route_start, route_end, updated_at)
@@ -516,13 +514,10 @@ async function syncDaily(env: Env): Promise<void> {
 		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`);
 
-	// 1. Stream schedule pages — write trains + routes to D1 per page
 	const { totalRoutes, stations: stationDict } = await fetchSchedulesPages(
 		env.PKP_API_KEY,
-		today,
+		date,
 		async (routes: RouteDto[], stations: Record<string, string>, pageNum: number) => {
-			console.log(`[syncDaily] Processing schedule page ${pageNum} — ${routes.length} routes`);
-
 			const trainBatch: D1PreparedStatement[] = [];
 			const routeBatch: D1PreparedStatement[] = [];
 
@@ -530,7 +525,6 @@ async function syncDaily(env: Env): Promise<void> {
 				const trainNumber = route.nationalNumber ?? route.name ?? `${route.scheduleId}`;
 				const carrier = route.carrierCode ?? '';
 				const category = route.commercialCategorySymbol ?? '';
-
 				const firstStation = route.stations?.[0];
 				const lastStation = route.stations?.[route.stations.length - 1];
 				const routeStart = firstStation ? (stations[String(firstStation.stationId)] ?? '') : '';
@@ -542,37 +536,27 @@ async function syncDaily(env: Env): Promise<void> {
 					),
 				);
 
-				// Route stops
 				const tripId = `${route.scheduleId}-${route.orderId}`;
 				for (const st of route.stations ?? []) {
 					routeBatch.push(
 						routeStmt.bind(
-							today, trainNumber, st.orderNumber, st.stationId,
+							date, trainNumber, st.orderNumber, st.stationId,
 							st.arrivalTime ?? null, st.departureTime ?? null, tripId,
 						),
 					);
 				}
 			}
 
-			if (trainBatch.length > 0) {
-				await batchExecute(env.DB, trainBatch);
-			}
-			if (routeBatch.length > 0) {
-				await batchExecute(env.DB, routeBatch);
-			}
-
-			console.log(`[syncDaily] Page ${pageNum} — wrote ${trainBatch.length} trains, ${routeBatch.length} route stops`);
+			if (trainBatch.length > 0) await batchExecute(env.DB, trainBatch);
+			if (routeBatch.length > 0) await batchExecute(env.DB, routeBatch);
+			console.log(`[syncSchedules] ${date} page ${pageNum} — ${trainBatch.length} trains, ${routeBatch.length} stops`);
 		},
 	);
 
-	console.log(`[syncDaily] Schedules done — ${totalRoutes} total routes processed`);
-
-	// 2. Update stations table from accumulated dictionary
-	const stationStmt = env.DB.prepare(`
-		INSERT OR REPLACE INTO stations (station_id, name, city)
-		VALUES (?, ?, ?)
-	`);
-
+	// Update stations from dictionary
+	const stationStmt = env.DB.prepare(
+		`INSERT OR REPLACE INTO stations (station_id, name, city) VALUES (?, ?, ?)`
+	);
 	const stationStmts: D1PreparedStatement[] = [];
 	for (const [idStr, name] of Object.entries(stationDict)) {
 		const stationId = Number(idStr);
@@ -580,13 +564,22 @@ async function syncDaily(env: Env): Promise<void> {
 		const city = name.split(/\s+/)[0] ?? name;
 		stationStmts.push(stationStmt.bind(stationId, name, city));
 	}
+	if (stationStmts.length > 0) await batchExecute(env.DB, stationStmts);
 
-	if (stationStmts.length > 0) {
-		const upserted = await batchExecute(env.DB, stationStmts);
-		console.log(`[syncDaily] Upserted ${upserted} stations`);
-	}
+	return totalRoutes;
+}
 
-	// 3. Run existing aggregation and backfill
+async function syncDaily(env: Env): Promise<void> {
+	const today = todayDateStr();
+	const yesterday = yesterdayDateStr();
+	console.log(`[syncDaily] Starting daily sync`);
+
+	// Sync both today and yesterday's schedules (yesterday's trains may still be running)
+	const todayRoutes = await syncSchedulesForDate(env, today);
+	const yesterdayRoutes = await syncSchedulesForDate(env, yesterday);
+	console.log(`[syncDaily] Synced ${todayRoutes} today + ${yesterdayRoutes} yesterday routes`);
+
+	// Run existing aggregation and backfill
 	await aggregateDaily(env).catch((err) =>
 		console.error(`[syncDaily] aggregateDaily failed: ${err}`),
 	);
