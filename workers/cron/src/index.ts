@@ -98,16 +98,22 @@ async function batchExecute(
 
 function computeDelay(st: OperationStationDto, operatingDate: string): number {
 	if (!st.plannedArrival || !st.actualArrival) return 0;
+	// Only compute if actual differs from planned (skip scheduled trains with matching times)
 	const planned = new Date(`${operatingDate}T${st.plannedArrival}`);
 	const actual = new Date(st.actualArrival);
-	return Math.round((actual.getTime() - planned.getTime()) / 60000);
+	const diffMin = Math.round((actual.getTime() - planned.getTime()) / 60000);
+	// Clamp to ±720 min (12 hours) — anything larger is a date mismatch, not a real delay
+	if (Math.abs(diffMin) > 720) return 0;
+	return diffMin;
 }
 
 function computeDelayDeparture(st: OperationStationDto, operatingDate: string): number {
 	if (!st.plannedDeparture || !st.actualDeparture) return 0;
 	const planned = new Date(`${operatingDate}T${st.plannedDeparture}`);
 	const actual = new Date(st.actualDeparture);
-	return Math.round((actual.getTime() - planned.getTime()) / 60000);
+	const diffMin = Math.round((actual.getTime() - planned.getTime()) / 60000);
+	if (Math.abs(diffMin) > 720) return 0;
+	return diffMin;
 }
 
 // ---------------------------------------------------------------------------
@@ -400,31 +406,36 @@ async function pollOperations(env: Env): Promise<void> {
 	}
 
 	// 10. Write stats:today to KV
-	const todayStats = {
-		timestamp: new Date().toISOString(),
-		totalTrains: pkpStats?.totalTrains ?? apiTotalTrains,
-		avgDelay: dailyAvgDelay ?? avgDelay,
-		punctualityPct: dailyPunctuality ?? punctualityPct,
-		cancelledCount: pkpStats?.cancelled ?? cancelledCount,
-		onTimeCount,
-		pkpOfficialStats: pkpStats ? {
-			totalTrains: pkpStats.totalTrains,
-			completed: pkpStats.completed,
-			inProgress: pkpStats.inProgress,
-			notStarted: pkpStats.notStarted,
-			cancelled: pkpStats.cancelled,
-			partialCancelled: pkpStats.partialCancelled,
-		} : null,
-		dailyPunctuality,
-		dailyAvgDelay,
-		topDelayed,
-		disruptions,
-		hourlyDelays,
-	};
+	try {
+		const todayStats = {
+			timestamp: new Date().toISOString(),
+			totalTrains: pkpStats?.totalTrains ?? apiTotalTrains,
+			avgDelay: dailyAvgDelay ?? avgDelay,
+			punctualityPct: dailyPunctuality ?? punctualityPct,
+			cancelledCount: pkpStats?.cancelled ?? cancelledCount,
+			onTimeCount,
+			pkpOfficialStats: pkpStats ? {
+				totalTrains: pkpStats.totalTrains,
+				completed: pkpStats.completed,
+				inProgress: pkpStats.inProgress,
+				notStarted: pkpStats.notStarted,
+				cancelled: pkpStats.cancelled,
+				partialCancelled: pkpStats.partialCancelled,
+			} : null,
+			dailyPunctuality,
+			dailyAvgDelay,
+			topDelayed,
+			disruptions,
+			hourlyDelays,
+		};
 
-	await env.DELAYS_KV.put("stats:today", JSON.stringify(todayStats), {
-		expirationTtl: 600,
-	});
+		await env.DELAYS_KV.put("stats:today", JSON.stringify(todayStats), {
+			expirationTtl: 600,
+		});
+		console.log(`[pollOperations] KV stats:today written successfully`);
+	} catch (err) {
+		console.error(`[pollOperations] FAILED to write KV stats: ${err}`);
+	}
 
 	console.log(
 		`[pollOperations] Stats — trains: ${todayStats.totalTrains}, onTime: ${onTimeCount}, ` +
