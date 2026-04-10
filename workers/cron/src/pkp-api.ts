@@ -142,13 +142,19 @@ async function pkpFetch<T>(
 // Public API
 // ---------------------------------------------------------------------------
 
-export async function fetchAllOperations(
+/**
+ * Fetch operations page by page, calling the handler for each page.
+ * This avoids holding all 33K trains in memory at once.
+ * pageSize=500 keeps each page manageable (~500 trains × ~10 stations = ~5K objects).
+ */
+export async function fetchOperationsPages(
   apiKey: string,
-): Promise<{ trains: TrainOperationDto[]; stations: Record<string, string> }> {
-  const allTrains: TrainOperationDto[] = [];
+  onPage: (trains: TrainOperationDto[], stations: Record<string, string>, pageNum: number) => Promise<void>,
+): Promise<{ totalTrains: number; stations: Record<string, string> }> {
   let allStations: Record<string, string> = {};
   let page = 1;
-  const pageSize = 1000;
+  let totalTrains = 0;
+  const pageSize = 2000;
 
   while (true) {
     const res = await pkpFetch<OperationsResponse>(
@@ -164,26 +170,27 @@ export async function fetchAllOperations(
 
     if (!res || !res.trains?.length) {
       if (page === 1) {
-        console.warn("[fetchAllOperations] No data from API on first page");
+        console.warn("[fetchOperationsPages] No data from API on first page");
       }
       break;
     }
 
-    allTrains.push(...res.trains);
     allStations = { ...allStations, ...res.stations };
+    totalTrains += res.trains.length;
+
+    await onPage(res.trains, allStations, page);
 
     if (!res.pagination.hasNextPage) break;
     page++;
 
-    // Safety: cap at 50 pages to avoid runaway loops
-    if (page > 50) {
-      console.warn(`[fetchAllOperations] Stopped at page ${page} (safety cap)`);
+    if (page > 100) {
+      console.warn(`[fetchOperationsPages] Stopped at page ${page} (safety cap)`);
       break;
     }
   }
 
-  console.log(`[fetchAllOperations] Fetched ${allTrains.length} trains across ${page} pages`);
-  return { trains: allTrains, stations: allStations };
+  console.log(`[fetchOperationsPages] Processed ${totalTrains} trains across ${page} pages`);
+  return { totalTrains, stations: allStations };
 }
 
 export async function fetchStatistics(

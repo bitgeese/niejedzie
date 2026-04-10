@@ -203,6 +203,12 @@ async function pollOperations(env: Env): Promise<void> {
 					totalTrainsSeen++;
 				}
 
+				// Skip Scheduled trains (no delay data yet) — just count them
+				if (train.trainStatus === 'S') {
+					if (isNew) onTimeCount++; // Scheduled = on time by default
+					continue;
+				}
+
 				const meta = trainMeta.get(trainKey);
 				const trainNumber = meta?.train_number ?? `${train.scheduleId}`;
 				const carrier = meta?.carrier ?? '';
