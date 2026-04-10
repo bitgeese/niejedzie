@@ -340,7 +340,31 @@ async function pollOperations(env: Env): Promise<void> {
 	// 6. Await PKP official stats (started in parallel at top)
 	const pkpStats = await pkpStatsPromise;
 
-	// 7. Fetch active disruptions from KV for inclusion in stats:today
+	// 6b. Write basic KV stats immediately (enhanced later)
+	try {
+		await env.DELAYS_KV.put("stats:today", JSON.stringify({
+			timestamp: new Date().toISOString(),
+			totalTrains: pkpStats?.totalTrains ?? apiTotalTrains,
+			avgDelay,
+			punctualityPct,
+			cancelledCount: pkpStats?.cancelled ?? cancelledCount,
+			onTimeCount,
+			pkpOfficialStats: pkpStats ? {
+				totalTrains: pkpStats.totalTrains,
+				completed: pkpStats.completed,
+				inProgress: pkpStats.inProgress,
+				notStarted: pkpStats.notStarted,
+				cancelled: pkpStats.cancelled,
+				partialCancelled: pkpStats.partialCancelled,
+			} : null,
+			topDelayed,
+		}), { expirationTtl: 600 });
+		console.log(`[pollOperations] Basic KV stats written`);
+	} catch (err) {
+		console.error(`[pollOperations] Failed to write basic KV stats: ${err}`);
+	}
+
+	// 7. Fetch active disruptions from KV for inclusion in enhanced stats
 	let disruptions: Array<{ message: string; route: string }> = [];
 	try {
 		const disruptionsRaw = await env.DELAYS_KV.get(
