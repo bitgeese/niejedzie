@@ -38,12 +38,6 @@ def _build_upsert_params(d: dict) -> list:
     ]
 
 
-def _stale_ids(current_ids: list[int], all_ids: list[int]) -> list[int]:
-    """Return IDs in all_ids that are NOT in current_ids (i.e. became inactive)."""
-    current_set = set(current_ids)
-    return [i for i in all_ids if i not in current_set]
-
-
 # ---------------------------------------------------------------------------
 # Main function
 # ---------------------------------------------------------------------------

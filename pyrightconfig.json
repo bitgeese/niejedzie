@@ -10,10 +10,12 @@
     ".astro"
   ],
   "pythonVersion": "3.12",
+  "extraPaths": ["pipeline"],
   "executionEnvironments": [
     {
       "root": "pipeline",
       "extraPaths": ["."]
     }
-  ]
+  ],
+  "reportMissingImports": "none"
 }
