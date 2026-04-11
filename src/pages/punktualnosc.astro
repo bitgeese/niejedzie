@@ -131,6 +131,12 @@ const usesLiveData = hasLiveMonthly || hasLiveOperators || hasLiveCategories;
             <p class="font-ticket text-[0.625rem] text-ink-faint tracking-wider text-center mt-1">
               Średnia z ostatnich 12 miesięcy
             </p>
+            {trendValues.length < 7 && (
+              <p class="text-xs text-ink-faint mt-2 text-center italic">
+                Dane od 11 kwietnia 2026 — pełna historia 12 miesięcy odbudowuje się codziennie
+                (aktualnie {trendValues.length} {trendValues.length === 1 ? 'dzień' : 'dni'}).
+              </p>
+            )}
           </Fragment>
         ) : (
           <div class="flex items-center justify-center" style="min-height: 240px;">
