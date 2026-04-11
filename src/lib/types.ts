@@ -176,13 +176,12 @@ export interface ApiError {
 
 export interface HealthCheck {
   status: 'healthy' | 'degraded' | 'unhealthy';
-  lastScrapeSuccess: string;
-  dataAge: number; // minutes
+  lastPollSuccess: string; // ISO timestamp from stats:today KV
+  dataAge: number; // minutes since last cron poll wrote stats:today
   issues: string[];
   services: {
     database: 'online' | 'offline' | 'degraded';
-    scraper: 'online' | 'offline' | 'degraded';
-    brightData: 'online' | 'offline' | 'not_configured';
+    pkpApi: 'online' | 'offline' | 'degraded';
     stripe: 'online' | 'offline' | 'degraded';
   };
 }

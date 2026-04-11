@@ -76,6 +76,8 @@ export interface RouteDto {
   name: string | null;
   carrierCode: string | null;
   nationalNumber: string | null;
+  internationalDepartureNumber?: string | null;
+  internationalArrivalNumber?: string | null;
   commercialCategorySymbol: string | null;
   operatingDates: string[];
   stations: ScheduleStationDto[];

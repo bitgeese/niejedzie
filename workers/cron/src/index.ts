@@ -92,6 +92,19 @@ async function batchExecute(
 	return executed;
 }
 
+// PKP /schedules returns scheduleId=YEAR (e.g. 2026) — never use it as train number.
+// Real identifiers live on the route itself: nationalNumber, then international
+// variants, then `name`. Compound key is the last-resort placeholder.
+function extractTrainNumber(route: RouteDto): string {
+	return (
+		(route.nationalNumber && route.nationalNumber.trim()) ||
+		(route.internationalDepartureNumber && route.internationalDepartureNumber.trim()) ||
+		(route.internationalArrivalNumber && route.internationalArrivalNumber.trim()) ||
+		(route.name && route.name.trim()) ||
+		`${route.scheduleId}/${route.orderId}`
+	);
+}
+
 // ---------------------------------------------------------------------------
 // Delay computation helpers
 // ---------------------------------------------------------------------------
@@ -210,7 +223,9 @@ async function pollOperations(env: Env): Promise<void> {
 				}
 
 				const meta = trainMeta.get(trainKey);
-				const trainNumber = meta?.train_number ?? `${train.scheduleId}`;
+				// scheduleId is the annual timetable year (2026), so never use it
+				// alone as a fallback — compound with orderId for a stable placeholder.
+				const trainNumber = meta?.train_number ?? `${train.scheduleId}/${train.orderId}`;
 				const carrier = meta?.carrier ?? '';
 
 				let trainMaxDelay = 0;
@@ -273,7 +288,10 @@ async function pollOperations(env: Env): Promise<void> {
 					if (delay > 5) isDelayed = true;
 				}
 
-				const numericMatch = trainNumber.match(/\d+/);
+				// Placeholder compound IDs (scheduleId/orderId) have no meaningful
+				// "numeric train number" — leave it blank rather than mining the year.
+				const isPlaceholder = trainNumber.includes('/');
+				const numericMatch = isPlaceholder ? null : trainNumber.match(/\d+/);
 				const trainNumberNumeric = numericMatch ? numericMatch[0] : '';
 
 				activeTrainBatch.push(
@@ -522,7 +540,7 @@ async function syncSchedulesForDate(env: Env, date: string): Promise<number> {
 			const routeBatch: D1PreparedStatement[] = [];
 
 			for (const route of routes) {
-				const trainNumber = route.nationalNumber ?? route.name ?? `${route.scheduleId}`;
+				const trainNumber = extractTrainNumber(route);
 				const carrier = route.carrierCode ?? '';
 				const category = route.commercialCategorySymbol ?? '';
 				const firstStation = route.stations?.[0];

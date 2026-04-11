@@ -4,150 +4,79 @@ import type { APIRoute } from 'astro';
 import type { HealthCheck } from '../../lib/types';
 import { env } from 'cloudflare:workers';
 
-export const GET: APIRoute = async ({ request }) => {
+const CRON_INTERVAL_MIN = 5;
+const DEGRADED_AFTER_MIN = CRON_INTERVAL_MIN * 3;  // 15 min
+const UNHEALTHY_AFTER_MIN = CRON_INTERVAL_MIN * 6; // 30 min
+
+export const GET: APIRoute = async () => {
+  const health: HealthCheck = {
+    status: 'healthy',
+    lastPollSuccess: '',
+    dataAge: 0,
+    issues: [],
+    services: {
+      database: 'online',
+      pkpApi: 'online',
+      stripe: 'online',
+    },
+  };
+
   try {
-    const health: HealthCheck = {
-      status: 'healthy',
-      lastScrapeSuccess: '',
-      dataAge: 0,
-      issues: [],
-      services: {
-        database: 'online',
-        scraper: 'online',
-        brightData: 'not_configured',
-        stripe: 'online',
-      }
-    };
-
-    // Check database connectivity
-    try {
-      const dbTest = await env.DB.prepare('SELECT 1 as test').first();
-      health.services.database = dbTest ? 'online' : 'offline';
-    } catch (err) {
-      health.services.database = 'offline';
-      health.issues.push('Database connection failed');
-      health.status = 'degraded';
-    }
-
-    // Check recent scraper activity
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const recentData = await env.DB.prepare(`
-        SELECT MAX(recorded_at) as last_recorded, COUNT(*) as station_count
-        FROM delay_snapshots
-        WHERE operating_date = ?
-      `).bind(today).first();
-
-      if (recentData?.last_recorded) {
-        const lastRecorded = new Date(recentData.last_recorded);
-        const ageMinutes = Math.floor((Date.now() - lastRecorded.getTime()) / (1000 * 60));
-        health.dataAge = ageMinutes;
-        health.lastScrapeSuccess = recentData.last_recorded;
-
-        if (ageMinutes > 10) {
-          health.services.scraper = 'degraded';
-          health.issues.push(`Data is ${ageMinutes} minutes old`);
-          health.status = 'degraded';
-        }
-
-        if (ageMinutes > 30) {
-          health.services.scraper = 'offline';
-          health.issues.push('Scraper appears to be down');
-          health.status = 'unhealthy';
-        }
-
-        if (recentData.station_count < 50) {
-          health.services.scraper = 'degraded';
-          health.issues.push(`Low station count: ${recentData.station_count}`);
-          health.status = 'degraded';
-        }
-      } else {
-        health.services.scraper = 'offline';
-        health.issues.push('No data found for today');
-        health.status = 'unhealthy';
-      }
-    } catch (err) {
-      health.services.scraper = 'offline';
-      health.issues.push('Failed to check scraper status');
-      health.status = 'degraded';
-    }
-
-    // Check for Bright Data API key
-    if (env.BRIGHT_DATA_API_KEY) {
-      health.services.brightData = 'online';
-    } else {
-      health.services.brightData = 'not_configured';
-    }
-
-    // Check Stripe configuration
-    try {
-      if (env.STRIPE_SECRET_KEY && env.STRIPE_WEBHOOK_SECRET) {
-        health.services.stripe = 'online';
-      } else {
-        health.services.stripe = 'degraded';
-        health.issues.push('Incomplete Stripe configuration');
-      }
-    } catch (err) {
-      health.services.stripe = 'offline';
-      health.issues.push('Stripe configuration error');
-    }
-
-    // Data quality check — null rate only (detailed checks in /api/quality)
-    try {
-      const qualityChecks = await env.DB.prepare(`
-        SELECT
-          COUNT(*) as total_stations,
-          SUM(CASE WHEN planned_arrival IS NULL AND planned_departure IS NULL
-                   AND actual_arrival IS NULL AND actual_departure IS NULL THEN 1 ELSE 0 END) as null_stations
-        FROM delay_snapshots
-        WHERE operating_date = ?
-      `).bind(new Date().toISOString().split('T')[0]).first();
-
-      if (qualityChecks && qualityChecks.total_stations > 0) {
-        const nullPercent = (qualityChecks.null_stations / qualityChecks.total_stations) * 100;
-
-        if (nullPercent > 20) {
-          health.issues.push(`High null data rate: ${nullPercent.toFixed(1)}%`);
-          health.status = 'degraded';
-        }
-      }
-    } catch (err) {
-      health.issues.push('Quality check failed');
-    }
-
-    // Set cache headers
-    const cacheTime = health.status === 'healthy' ? 60 : 30; // Cache less when unhealthy
-
-    return new Response(JSON.stringify(health), {
-      status: health.status === 'unhealthy' ? 503 : 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': `public, max-age=${cacheTime}`,
-      },
-    });
-
-  } catch (err) {
-    console.error('[api/health] Error:', err);
-
-    const errorHealth: HealthCheck = {
-      status: 'unhealthy',
-      lastScrapeSuccess: '',
-      dataAge: -1,
-      issues: ['Health check failed'],
-      services: {
-        database: 'offline',
-        scraper: 'offline',
-        brightData: 'not_configured',
-        stripe: 'offline',
-      }
-    };
-
-    return new Response(JSON.stringify(errorHealth), {
-      status: 503,
-      headers: {
-        'Content-Type': 'application/json',
-        'Cache-Control': 'no-cache',
-      },
-    });
+    await env.DB.prepare('SELECT 1').first();
+  } catch {
+    health.services.database = 'offline';
+    health.issues.push('Database connection failed');
+    health.status = 'unhealthy';
   }
+
+  try {
+    const cached = await env.DELAYS_KV.get('stats:today', 'json') as
+      | { timestamp?: string; totalTrains?: number }
+      | null;
+
+    if (!cached?.timestamp) {
+      health.services.pkpApi = 'offline';
+      health.issues.push('No stats:today in KV — cron has never written');
+      health.status = 'unhealthy';
+    } else {
+      const ageMs = Date.now() - new Date(cached.timestamp).getTime();
+      const ageMinutes = Math.max(0, Math.floor(ageMs / 60_000));
+      health.dataAge = ageMinutes;
+      health.lastPollSuccess = cached.timestamp;
+
+      if (ageMinutes >= UNHEALTHY_AFTER_MIN) {
+        health.services.pkpApi = 'offline';
+        health.issues.push(`Last poll was ${ageMinutes} min ago`);
+        health.status = 'unhealthy';
+      } else if (ageMinutes >= DEGRADED_AFTER_MIN) {
+        health.services.pkpApi = 'degraded';
+        health.issues.push(`Last poll was ${ageMinutes} min ago`);
+        if (health.status === 'healthy') health.status = 'degraded';
+      }
+
+      if (cached.totalTrains != null && cached.totalTrains < 100) {
+        health.services.pkpApi = 'degraded';
+        health.issues.push(`Only ${cached.totalTrains} trains in last poll`);
+        if (health.status === 'healthy') health.status = 'degraded';
+      }
+    }
+  } catch (err) {
+    health.services.pkpApi = 'offline';
+    health.issues.push('Failed to read stats:today from KV');
+    health.status = 'unhealthy';
+  }
+
+  if (!env.STRIPE_SECRET_KEY || !env.STRIPE_WEBHOOK_SECRET) {
+    health.services.stripe = 'degraded';
+    health.issues.push('Incomplete Stripe configuration');
+    if (health.status === 'healthy') health.status = 'degraded';
+  }
+
+  return new Response(JSON.stringify(health), {
+    status: health.status === 'unhealthy' ? 503 : 200,
+    headers: {
+      'Content-Type': 'application/json',
+      'Cache-Control': `public, max-age=${health.status === 'healthy' ? 60 : 30}`,
+    },
+  });
 };
