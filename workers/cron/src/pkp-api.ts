@@ -125,19 +125,46 @@ async function pkpFetch<T>(
     }
   }
 
-  const res = await fetch(url.toString(), {
-    headers: {
-      "X-API-Key": apiKey,
-      Accept: "application/json",
-    },
-  });
+  // Retry on 5xx / network errors — the PKP API (and Cloudflare's edge in front
+  // of it) occasionally returns HTTP 530/1016 for otherwise-valid requests.
+  // Without this, a single flake wipes out a whole sync run.
+  const maxAttempts = 3;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const res = await fetch(url.toString(), {
+        headers: {
+          "X-API-Key": apiKey,
+          Accept: "application/json",
+        },
+      });
 
-  if (!res.ok) {
-    console.error(`PKP API error: ${res.status} ${res.statusText} for ${url.pathname}`);
-    return null;
+      if (res.ok) {
+        return res.json() as Promise<T>;
+      }
+
+      // Retry 5xx; give up immediately on 4xx (auth / bad request).
+      if (res.status < 500 || attempt === maxAttempts) {
+        console.error(
+          `PKP API error: ${res.status} ${res.statusText} for ${url.pathname} (attempt ${attempt}/${maxAttempts})`,
+        );
+        return null;
+      }
+      console.warn(
+        `PKP API ${res.status} for ${url.pathname}, retrying (attempt ${attempt}/${maxAttempts})`,
+      );
+    } catch (err) {
+      if (attempt === maxAttempts) {
+        console.error(`PKP API fetch threw for ${url.pathname}: ${err}`);
+        return null;
+      }
+      console.warn(
+        `PKP API fetch threw for ${url.pathname}, retrying (attempt ${attempt}/${maxAttempts}): ${err}`,
+      );
+    }
+    // Linear backoff: 500ms, 1000ms
+    await new Promise((r) => setTimeout(r, 500 * attempt));
   }
-
-  return res.json() as Promise<T>;
+  return null;
 }
 
 // ---------------------------------------------------------------------------
