@@ -23,6 +23,11 @@ export function formatTime(value: string | null): string | null {
   return value;
 }
 
+/** Returns today's date in Poland timezone as YYYY-MM-DD */
+export function getPolandDate(now?: Date): string {
+  return getPolandTime(now).dateStr;
+}
+
 /**
  * Returns current Poland time components.
  * Extracted for testability — tests can mock this.
