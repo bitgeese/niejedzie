@@ -106,6 +106,16 @@ try {
   fetchError = 'Nie udało się sprawdzić połączenia';
 }
 
+function addDelayToTime(hhmm: string | null, delayMin: number): string {
+  if (!hhmm) return '';
+  const [h, m] = hhmm.split(':').map(Number);
+  if (isNaN(h) || isNaN(m)) return hhmm;
+  const totalMinutes = h * 60 + m + delayMin;
+  const newH = Math.floor(((totalMinutes % 1440) + 1440) % 1440 / 60);
+  const newM = ((totalMinutes % 60) + 60) % 60;
+  return `${String(newH).padStart(2, '0')}:${String(newM).padStart(2, '0')}`;
+}
+
 const isDirect = data?.type === 'direct';
 const isConnection = data?.type === 'connection';
 const notFound = data?.type === 'not_found';
@@ -129,18 +139,25 @@ const directInfo = data?.direct;
 
   {/* Error / not found state */}
   {(notFound || noRoute || fetchError) && (
-    <section class="max-w-4xl mx-auto px-4 py-20 text-center">
+    <section class="max-w-4xl mx-auto px-4 py-16 text-center">
       <div class="max-w-md mx-auto">
-        <p class="text-5xl mb-6">🚂</p>
-        <h1 class="text-xl font-bold text-ink mb-3">
-          {fetchError || data?.message || 'Nie znaleziono połączenia'}
-        </h1>
-        <p class="text-ink-muted text-sm mb-8">
-          {noRoute
-            ? 'Dane o trasie tego pociągu nie są jeszcze dostępne. Spróbuj ponownie za kilka minut.'
-            : 'Sprawdź numer pociągu i nazwę stacji docelowej.'}
+        <p class="text-6xl mb-6">🚂</p>
+        <h2 class="text-2xl font-bold text-ink mb-3">
+          {fetchError
+            ? 'Nie udało się sprawdzić połączenia'
+            : data?.type === 'not_found'
+              ? `Nie znaleźliśmy pociągu "${trainParam}"`
+              : 'Brak danych o trasie'}
+        </h2>
+        <p class="text-ink-muted text-sm mb-8 max-w-md mx-auto">
+          Dane rozkładowe synchronizujemy codziennie o 02:00 — spróbuj ponownie za kilka minut lub
+          wpisz pełny numer pociągu z prefiksem (np. IC 5313, TLK 31100, EIC 1700).
         </p>
-        <a href="/" class="btn-primary inline-block px-8">Spróbuj ponownie</a>
+        <div class="flex flex-wrap gap-3 justify-center">
+          <a href="/gdzie-jest-pociag" class="btn-primary inline-block px-8">Wróć do wyszukiwania</a>
+          <a href="/opoznienia/dzisiaj" class="inline-block px-6 py-2.5 rounded-xl border border-border-strong text-ink-secondary font-semibold text-sm hover:bg-surface-sunken transition-colors">Opóźnienia dzisiaj</a>
+          <a href="/" class="inline-block px-6 py-2.5 rounded-xl border border-border-strong text-ink-secondary font-semibold text-sm hover:bg-surface-sunken transition-colors">Strona główna</a>
+        </div>
       </div>
     </section>
   )}
@@ -186,7 +203,14 @@ const directInfo = data?.direct;
                 {directInfo.arrivalTime && (
                   <div class="text-right">
                     <p class="text-xs text-green-600">Przyjazd</p>
-                    <p class="font-ticket text-lg font-bold text-green-800">{directInfo.arrivalTime}</p>
+                    {train.maxDelay > 0 ? (
+                      <div>
+                        <p class="font-ticket text-lg font-bold text-green-800">~{addDelayToTime(directInfo.arrivalTime, train.maxDelay)}</p>
+                        <p class="text-xs text-ink-faint mt-0.5 font-mono">planowo {directInfo.arrivalTime} · +{train.maxDelay} min</p>
+                      </div>
+                    ) : (
+                      <p class="font-ticket text-lg font-bold text-green-800">{directInfo.arrivalTime}</p>
+                    )}
                   </div>
                 )}
               </div>
