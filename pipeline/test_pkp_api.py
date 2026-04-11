@@ -72,6 +72,8 @@ def test_pkp_fetch_retries_on_5xx(mock_get, mock_sleep):
     result = pkp_api.pkp_fetch("/api/v1/schedules", "fake-key", {})
     assert result == {"routes": []}
     assert mock_get.call_count == 2
+    # 5xx retry went through the linear backoff (500ms * 1)
+    mock_sleep.assert_called_once_with(0.5)
 
 
 @patch("pkp_api.time.sleep")
@@ -83,3 +85,5 @@ def test_pkp_fetch_gives_up_on_4xx(mock_get, mock_sleep):
     result = pkp_api.pkp_fetch("/api/v1/schedules", "fake-key", {})
     assert result is None
     assert mock_get.call_count == 1
+    # No retry on 4xx, so no backoff sleep either
+    mock_sleep.assert_not_called()

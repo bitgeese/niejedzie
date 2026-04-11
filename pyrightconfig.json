@@ -1,0 +1,14 @@
+{
+  "include": ["pipeline"],
+  "exclude": [
+    "pipeline/.venv",
+    "pipeline/__pycache__",
+    "pipeline/.pytest_cache",
+    "node_modules",
+    "dist",
+    ".wrangler",
+    ".astro"
+  ],
+  "extraPaths": ["pipeline"],
+  "pythonVersion": "3.12"
+}
