@@ -9,6 +9,11 @@
     ".wrangler",
     ".astro"
   ],
-  "extraPaths": ["pipeline"],
-  "pythonVersion": "3.12"
+  "pythonVersion": "3.12",
+  "executionEnvironments": [
+    {
+      "root": "pipeline",
+      "extraPaths": ["."]
+    }
+  ]
 }
