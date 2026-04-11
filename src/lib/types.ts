@@ -22,8 +22,6 @@ export interface ApiStation {
   // Enhanced data quality fields
   confidence?: 'high' | 'medium' | 'low' | 'estimated';
   isEstimated?: boolean;
-  dataSource?: 'portal_pasazera_detail' | 'portal_pasazera_summary' | 'route_completion' | 'auto_healing';
-  appliedFixes?: string[];
 }
 
 export interface ApiTrain {

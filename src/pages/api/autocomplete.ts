@@ -76,7 +76,7 @@ export const GET: APIRoute = async ({ url }) => {
         }
       }
 
-      // Also check active_trains (GTFS-RT roster) for on-time trains
+      // Also check active_trains (live PKP API roster) for on-time trains
       const today = getPolandDate();
 
       const activeTrains = await env.DB.prepare(`
