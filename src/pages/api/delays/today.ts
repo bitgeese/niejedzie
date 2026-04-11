@@ -56,16 +56,17 @@ export const GET: APIRoute = async () => {
     // ── Fast path: KV cache ──────────────────────────────────────────
     const cached = await env.DELAYS_KV.get('stats:today', 'json') as Record<string, any> | null;
     if (cached) {
-      // Normalize: prefer Portal Pasażera real punctuality > GTFS-RT corrected > scraper-only
+      // Best sources: PKP official stats > Portal real-time > GTFS-RT corrected
+      const pkp = cached.pkpOfficialStats;
       const normalized: TodayResponse = {
         stats: {
-          totalTrains: cached.gtfsRtTotalTrains || cached.totalTrains || 0,
+          totalTrains: pkp?.totalTrains || cached.gtfsRtTotalTrains || cached.totalTrains || 0,
           punctuality: cached.portalPunctualityOnRoute
             ?? cached.correctedPunctualityPct
             ?? cached.punctualityPct
             ?? 0,
-          avgDelay: cached.avgDelay || 0,
-          cancelled: cached.cancelledCount || 0,
+          avgDelay: cached.dailyAvgDelay ?? cached.avgDelay ?? 0,
+          cancelled: pkp?.cancelled || cached.cancelledCount || 0,
         },
         hourlyDelays: cached.hourlyDelays || [],
         topDelayed: cached.topDelayed || [],
@@ -89,20 +90,26 @@ export const GET: APIRoute = async () => {
       String(polandTime.getDate()).padStart(2, '0'),
     ].join('-');
 
-    // Overall stats for today
+    // Overall stats for today — compute per-train, not per-station-row
     const statsRow = await env.DB.prepare(`
       SELECT
-        COUNT(DISTINCT schedule_id || '-' || order_id) AS total_trains,
-        AVG(COALESCE(arrival_delay, departure_delay, 0)) AS avg_delay,
-        SUM(CASE WHEN COALESCE(arrival_delay, departure_delay, 0) <= 5 THEN 1 ELSE 0 END) AS on_time,
-        SUM(CASE WHEN is_cancelled = 1 THEN 1 ELSE 0 END) AS cancelled
-      FROM delay_snapshots
-      WHERE operating_date = ?
+        COUNT(*) AS total_trains,
+        SUM(CASE WHEN max_delay <= 5 THEN 1 ELSE 0 END) AS on_time,
+        ROUND(AVG(CASE WHEN max_delay > 0 THEN max_delay ELSE 0 END), 1) AS avg_delay,
+        SUM(CASE WHEN is_cancelled THEN 1 ELSE 0 END) AS cancelled
+      FROM (
+        SELECT schedule_id, order_id,
+          MAX(COALESCE(arrival_delay, departure_delay, 0)) AS max_delay,
+          MAX(is_cancelled) AS is_cancelled
+        FROM delay_snapshots
+        WHERE operating_date = ?
+        GROUP BY schedule_id, order_id
+      )
     `).bind(today).first();
 
     const totalTrains = (statsRow?.total_trains as number) || 0;
     const onTime = (statsRow?.on_time as number) || 0;
-    const punctuality = totalTrains > 0 ? Math.round((onTime / totalTrains) * 100) : 0;
+    const punctuality = totalTrains > 0 ? Math.round((onTime / totalTrains) * 1000) / 10 : 0;
 
     const stats: TodayStats = {
       totalTrains,
@@ -134,6 +141,7 @@ export const GET: APIRoute = async () => {
         agg.schedule_id,
         agg.order_id,
         COALESCE(t.train_number, agg.schedule_id || '/' || agg.order_id) AS train_number,
+        t.carrier AS carrier,
         agg.max_delay,
         COALESCE(t.route_start || ' \u2192 ' || t.route_end, '') AS route,
         COALESCE(detail.station_name, '') AS station_name
@@ -161,6 +169,7 @@ export const GET: APIRoute = async () => {
       delay: r.max_delay as number,
       route: r.route as string,
       station: (r.station_name as string) || '',
+      carrier: (r.carrier as string) || undefined,
     }));
 
     // Active disruptions from KV or D1
