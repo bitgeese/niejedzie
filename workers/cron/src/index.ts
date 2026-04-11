@@ -195,8 +195,8 @@ async function pollOperations(env: Env): Promise<void> {
 	const activeTrainStmt = env.DB.prepare(`
 		INSERT OR REPLACE INTO active_trains
 			(operating_date, train_number, train_number_numeric, carrier, agency_id,
-			 trip_id, stop_count, is_delayed, max_delay, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+			 trip_id, stop_count, is_delayed, max_delay, schedule_id, order_id, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
 	`);
 
 	// 4. Stream pages — process each page immediately without holding all trains in memory
@@ -305,6 +305,8 @@ async function pollOperations(env: Env): Promise<void> {
 						train.stations.length,
 						isDelayed ? 1 : 0,
 						maxDelay,
+						train.scheduleId,
+						train.orderId,
 					),
 				);
 
