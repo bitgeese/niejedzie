@@ -28,6 +28,9 @@ interface Env {
 	// Modal hybrid scheduler — CF Worker cron fires HTTP POSTs to Modal web
 	// endpoints which spawn the actual work on Modal compute.
 	TRIGGER_TOKEN?: string;
+	// VAPID keys for Web Push — private key is a secret, public key is a var
+	VAPID_PRIVATE_KEY?: string;
+	VAPID_PUBLIC_KEY?: string;
 }
 
 const MODAL_TRIGGER_BASE = "https://maciek-61303--niejedzie-cron";
@@ -1269,7 +1272,7 @@ async function processSession(
 			body: `Pociag A jest opozniony o ${Math.abs(Math.round(bufferMinutes))} min. Polaczenie utracone.`,
 			tag: `session-${session.id}`,
 			data: { sessionId: session.id, status: "missed", bufferMinutes },
-		});
+		}, env);
 
 		return;
 	}
@@ -1281,7 +1284,7 @@ async function processSession(
 			body: `Zostalo tylko ${Math.round(bufferMinutes)} min na przesiadke. Obserwuj opoznienia.`,
 			tag: `session-${session.id}`,
 			data: { sessionId: session.id, status: "at_risk", bufferMinutes },
-		});
+		}, env);
 	}
 
 	await env.DB.prepare(
@@ -1555,6 +1558,34 @@ export default {
 		if (url.pathname === "/__trigger/data-quality") {
 			ctx.waitUntil(reportDataQualityIssues(env));
 			return Response.json({ triggered: "dataQualityCheck" });
+		}
+
+		if (url.pathname === "/__trigger/test-push") {
+			try {
+				const sessionId = url.searchParams.get('session');
+				if (!sessionId) {
+					return Response.json({ error: "missing ?session=ID" }, { status: 400 });
+				}
+				const session = await env.DB.prepare(
+					"SELECT id, push_subscription FROM monitoring_sessions WHERE id = ?"
+				).bind(sessionId).first<{ id: string; push_subscription: string }>();
+				if (!session) {
+					return Response.json({ error: "session not found" }, { status: 404 });
+				}
+				if (!session.push_subscription) {
+					return Response.json({ error: "session has no push_subscription" }, { status: 400 });
+				}
+				const payload: PushPayload = {
+					title: "niejedzie.pl — test push",
+					body: `Synthetic test push for session ${sessionId}`,
+					tag: `test-${sessionId}`,
+					data: { sessionId, test: true },
+				};
+				await sendPushNotification(session.push_subscription, payload, env);
+				return Response.json({ sent: true, sessionId });
+			} catch (err) {
+				return Response.json({ error: String(err), stack: (err as Error).stack }, { status: 500 });
+			}
 		}
 
 		return new Response("niejedzie-cron worker", { status: 200 });

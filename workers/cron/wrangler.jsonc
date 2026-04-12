@@ -2,6 +2,9 @@
 	"name": "niejedzie-cron",
 	"main": "src/index.ts",
 	"compatibility_date": "2026-03-17",
+	"vars": {
+		"VAPID_PUBLIC_KEY": "BFLi-ICY_EtSBOeCl-KB9Uwx211aVkjXmkGljUP_XjveSp1_G3a1mzdhVJ6wGu4pXz9Y8HW_o_nFCul62AsfMBc"
+	},
 	"d1_databases": [
 		{
 			"binding": "DB",
