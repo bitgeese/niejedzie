@@ -54,13 +54,29 @@ RETRIES = modal.Retries(
 # .spawn() these to run the actual work on Modal compute.
 # ---------------------------------------------------------------------------
 
-@app.function(image=image, secrets=SECRETS, timeout=300, retries=RETRIES)
+@app.function(
+    image=image,
+    secrets=SECRETS,
+    timeout=900,                # 15 min — CF D1 REST API is per-HTTP-call,
+                                # ~50K rows × ~7 rows/call × 50ms ≈ 6 min.
+                                # Keep headroom for retries and slow days.
+    retries=RETRIES,
+    max_containers=1,           # Serialize invocations — CF Worker cron
+                                # fires every 5 min; if one poll is still
+                                # running, queue the next instead of racing.
+)
 def poll_operations_work():
     import poll_operations as impl
     impl.poll_operations()
 
 
-@app.function(image=image, secrets=SECRETS, timeout=60, retries=RETRIES)
+@app.function(
+    image=image,
+    secrets=SECRETS,
+    timeout=60,
+    retries=RETRIES,
+    max_containers=1,
+)
 def poll_disruptions_work():
     import poll_disruptions as impl
     impl.poll_disruptions()
