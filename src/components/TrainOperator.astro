@@ -10,11 +10,36 @@ interface Props {
 
 const { trainNumber, carrier, showIcon = true, iconSize = 'md' } = Astro.props;
 
+// PKP API returns short carrier codes (IC, KM, PR, KD, …); older data sources
+// used full names ("PKP Intercity", "Koleje Mazowieckie"). Map both.
+const CARRIER_SHORT_CODES: Record<string, OperatorCode> = {
+  IC: 'IC', EIC: 'IC', EIP: 'IC', TLK: 'IC',
+  PR: 'PR',
+  KD: 'KD',
+  KS: 'KS',
+  KW: 'KW',
+  KM: 'KM',
+  'KMŁ': 'KML',
+  'ŁKA': 'LKA',
+  SKM: 'SKM',
+  SKMT: 'SKMT',
+  WKD: 'WKD',
+  AR: 'AR',
+  RJ: 'RJ',
+  LEO: 'LEO',
+  'LEO EXPRESS': 'LEO',
+};
+
 // Extract operator code from carrier name or train number
 function getOperatorCode(trainNumber: string, carrier?: string): OperatorCode | null {
   // Try to extract from carrier name first
   if (carrier) {
-    const carrierLower = carrier.toLowerCase();
+    const trimmed = carrier.trim();
+    // Short codes first (PKP API format)
+    const codeMatch = CARRIER_SHORT_CODES[trimmed] || CARRIER_SHORT_CODES[trimmed.toUpperCase()];
+    if (codeMatch) return codeMatch;
+
+    const carrierLower = trimmed.toLowerCase();
     if (carrierLower.includes('intercity')) return 'IC';
     if (carrierLower.includes('polregio')) return 'PR';
     if (carrierLower.includes('mazowieckie')) return 'KM';
