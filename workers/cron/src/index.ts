@@ -1460,23 +1460,29 @@ export default {
 		env: Env,
 		ctx: ExecutionContext,
 	): Promise<void> {
-		// Hybrid: CF Worker cron fires HTTP POSTs to Modal web endpoints which
-		// spawn the actual work on Modal compute. The TS pollOperations /
-		// pollDisruptions / syncDaily functions below are kept for manual
-		// /__trigger/* debugging only — they are NOT called on the scheduled
-		// path anymore. Rollback: revert this scheduled() body.
+		// Native TS business logic — reliable, no network hop. Modal hybrid
+		// endpoints exist at pipeline/ and can be re-enabled by switching
+		// back to fireModalTrigger() calls (see commit 54e9d17).
 		switch (controller.cron) {
 			case "*/5 * * * *":
 				ctx.waitUntil(
 					Promise.all([
-						fireModalTrigger(MODAL_POLL_OPERATIONS_URL, env.TRIGGER_TOKEN),
-						fireModalTrigger(MODAL_POLL_DISRUPTIONS_URL, env.TRIGGER_TOKEN),
+						pollOperations(env).catch((err) =>
+							console.error(`[pollOperations] Fatal: ${err}`),
+						),
+						pollDisruptions(env).catch((err) =>
+							console.error(`[pollDisruptions] Fatal: ${err}`),
+						),
 					]),
 				);
 				break;
 
 			case "0 2 * * *":
-				ctx.waitUntil(fireModalTrigger(MODAL_SYNC_DAILY_URL, env.TRIGGER_TOKEN));
+				ctx.waitUntil(
+					syncDaily(env).catch((err) =>
+						console.error(`[syncDaily] Fatal: ${err}`),
+					),
+				);
 				break;
 
 			default:

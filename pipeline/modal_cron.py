@@ -24,6 +24,7 @@ app = modal.App("niejedzie-cron")
 
 image = (
     modal.Image.debian_slim(python_version="3.12")
+    .env({"PYTHONUNBUFFERED": "1"})  # print() flushes immediately so Modal logs track progress in real-time
     .pip_install("requests>=2.31", "python-dateutil>=2.8", "fastapi[standard]")
     .add_local_file("pkp_api.py", "/root/pkp_api.py")
     .add_local_file("cf_d1.py", "/root/cf_d1.py")
@@ -60,10 +61,7 @@ RETRIES = modal.Retries(
     timeout=900,                # 15 min — CF D1 REST API is per-HTTP-call,
                                 # ~50K rows × ~7 rows/call × 50ms ≈ 6 min.
                                 # Keep headroom for retries and slow days.
-    retries=RETRIES,
-    max_containers=1,           # Serialize invocations — CF Worker cron
-                                # fires every 5 min; if one poll is still
-                                # running, queue the next instead of racing.
+    retries=modal.Retries(max_retries=0),  # Don't pile up retries behind slow polls
 )
 def poll_operations_work():
     import poll_operations as impl
@@ -75,7 +73,6 @@ def poll_operations_work():
     secrets=SECRETS,
     timeout=60,
     retries=RETRIES,
-    max_containers=1,
 )
 def poll_disruptions_work():
     import poll_disruptions as impl
