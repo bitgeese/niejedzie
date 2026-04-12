@@ -1,23 +1,30 @@
-"""Modal app for niejedzie.pl scheduled jobs.
+"""Modal app for niejedzie.pl — HTTP-triggered worker.
 
-Replaces the Cloudflare cron worker. Three scheduled functions:
-- poll_operations  — every 5 min — PKP API → delay_snapshots + stats:today KV
-- poll_disruptions — every 5 min — PKP API → disruptions + disruptions:active KV
-- sync_daily       — daily 02:00 UTC — /schedules for today+yesterday + aggregate + prune
+Modal Starter plan has a 5-cron cap across the account and we're already at
+5 from supplementchecker + checkpeptides. So instead of Modal cron
+schedules, niejedzie's existing Cloudflare cron worker fires POST requests
+to three Modal web endpoints, which then spawn the heavy work on Modal.
+
+Endpoints (all POST, header `X-Trigger-Token` must match env `TRIGGER_TOKEN`):
+- /trigger_poll_operations  — spawns poll_operations work (5-min cadence from CF)
+- /trigger_poll_disruptions — spawns poll_disruptions work (5-min cadence from CF)
+- /trigger_sync_daily       — spawns sync_daily work (daily 02:00 UTC from CF)
 
 Deploy:
-    modal deploy modal_cron.py
+    cd pipeline && modal deploy modal_cron.py
 
-Manual trigger:
-    modal run modal_cron.py::poll_operations
+Manual run (bypasses HTTP, useful for local debug):
+    modal run modal_cron.py::poll_operations_work
 """
+import os
 import modal
+from fastapi import Request, HTTPException
 
 app = modal.App("niejedzie-cron")
 
 image = (
     modal.Image.debian_slim(python_version="3.12")
-    .pip_install("requests>=2.31", "python-dateutil>=2.8")
+    .pip_install("requests>=2.31", "python-dateutil>=2.8", "fastapi[standard]")
     .add_local_file("pkp_api.py", "/root/pkp_api.py")
     .add_local_file("cf_d1.py", "/root/cf_d1.py")
     .add_local_file("cf_kv.py", "/root/cf_kv.py")
@@ -31,6 +38,7 @@ image = (
 SECRETS = [
     modal.Secret.from_name("niejedzie-cloudflare"),
     modal.Secret.from_name("niejedzie-pkp"),
+    modal.Secret.from_name("niejedzie-trigger"),
 ]
 
 RETRIES = modal.Retries(
@@ -40,26 +48,20 @@ RETRIES = modal.Retries(
 )
 
 
-@app.function(
-    image=image,
-    secrets=SECRETS,
-    schedule=modal.Cron("*/5 * * * *"),
-    timeout=300,
-    retries=RETRIES,
-)
-def poll_operations():
+# ---------------------------------------------------------------------------
+# Heavy work functions — spawned asynchronously from the HTTP trigger layer.
+# No schedule — the Cloudflare Worker cron fires the HTTP endpoints, which
+# .spawn() these to run the actual work on Modal compute.
+# ---------------------------------------------------------------------------
+
+@app.function(image=image, secrets=SECRETS, timeout=300, retries=RETRIES)
+def poll_operations_work():
     import poll_operations as impl
     impl.poll_operations()
 
 
-@app.function(
-    image=image,
-    secrets=SECRETS,
-    schedule=modal.Cron("*/5 * * * *"),
-    timeout=60,
-    retries=RETRIES,
-)
-def poll_disruptions():
+@app.function(image=image, secrets=SECRETS, timeout=60, retries=RETRIES)
+def poll_disruptions_work():
     import poll_disruptions as impl
     impl.poll_disruptions()
 
@@ -67,11 +69,10 @@ def poll_disruptions():
 @app.function(
     image=image,
     secrets=SECRETS,
-    schedule=modal.Cron("0 2 * * *"),
     timeout=900,
     retries=modal.Retries(max_retries=1, initial_delay=60.0),
 )
-def sync_daily():
+def sync_daily_work():
     import sync_schedules
     import aggregate_daily
     import tz_utils
@@ -90,3 +91,40 @@ def sync_daily():
     aggregate_daily.aggregate_daily()
     aggregate_daily.backfill_city_daily()
     aggregate_daily.prune_old_data()
+
+
+# ---------------------------------------------------------------------------
+# HTTP trigger endpoints — thin layer: auth check + spawn.
+# ---------------------------------------------------------------------------
+
+def _check_token(headers) -> bool:
+    expected = os.environ.get("TRIGGER_TOKEN")
+    provided = headers.get("x-trigger-token") or headers.get("X-Trigger-Token")
+    return bool(expected) and provided == expected
+
+
+@app.function(image=image, secrets=SECRETS)
+@modal.fastapi_endpoint(method="POST", docs=False)
+def trigger_poll_operations(request: Request):
+    if not _check_token(request.headers):
+        raise HTTPException(status_code=403, detail="forbidden")
+    call = poll_operations_work.spawn()
+    return {"status": "spawned", "call_id": call.object_id}
+
+
+@app.function(image=image, secrets=SECRETS)
+@modal.fastapi_endpoint(method="POST", docs=False)
+def trigger_poll_disruptions(request: Request):
+    if not _check_token(request.headers):
+        raise HTTPException(status_code=403, detail="forbidden")
+    call = poll_disruptions_work.spawn()
+    return {"status": "spawned", "call_id": call.object_id}
+
+
+@app.function(image=image, secrets=SECRETS)
+@modal.fastapi_endpoint(method="POST", docs=False)
+def trigger_sync_daily(request: Request):
+    if not _check_token(request.headers):
+        raise HTTPException(status_code=403, detail="forbidden")
+    call = sync_daily_work.spawn()
+    return {"status": "spawned", "call_id": call.object_id}

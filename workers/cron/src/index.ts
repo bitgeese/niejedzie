@@ -25,6 +25,36 @@ interface Env {
 	DELAYS_KV: KVNamespace;
 	PKP_API_KEY: string;
 	ANTHROPIC_API_KEY?: string;
+	// Modal hybrid scheduler — CF Worker cron fires HTTP POSTs to Modal web
+	// endpoints which spawn the actual work on Modal compute.
+	TRIGGER_TOKEN?: string;
+}
+
+const MODAL_TRIGGER_BASE = "https://maciek-61303--niejedzie-cron";
+const MODAL_POLL_OPERATIONS_URL = `${MODAL_TRIGGER_BASE}-trigger-poll-operations.modal.run`;
+const MODAL_POLL_DISRUPTIONS_URL = `${MODAL_TRIGGER_BASE}-trigger-poll-disruptions.modal.run`;
+const MODAL_SYNC_DAILY_URL = `${MODAL_TRIGGER_BASE}-trigger-sync-daily.modal.run`;
+
+async function fireModalTrigger(url: string, token: string | undefined): Promise<void> {
+	if (!token) {
+		console.error(`[modal-trigger] TRIGGER_TOKEN not set — skipping ${url}`);
+		return;
+	}
+	try {
+		const res = await fetch(url, {
+			method: "POST",
+			headers: { "X-Trigger-Token": token },
+		});
+		if (!res.ok) {
+			const body = await res.text().catch(() => "");
+			console.error(`[modal-trigger] ${url} returned ${res.status}: ${body.slice(0, 200)}`);
+		} else {
+			const body = await res.json().catch(() => ({}));
+			console.log(`[modal-trigger] ${url} spawned:`, body);
+		}
+	} catch (err) {
+		console.error(`[modal-trigger] ${url} threw: ${err}`);
+	}
 }
 
 /** Monitoring session row from D1 */
@@ -1427,26 +1457,23 @@ export default {
 		env: Env,
 		ctx: ExecutionContext,
 	): Promise<void> {
+		// Hybrid: CF Worker cron fires HTTP POSTs to Modal web endpoints which
+		// spawn the actual work on Modal compute. The TS pollOperations /
+		// pollDisruptions / syncDaily functions below are kept for manual
+		// /__trigger/* debugging only — they are NOT called on the scheduled
+		// path anymore. Rollback: revert this scheduled() body.
 		switch (controller.cron) {
 			case "*/5 * * * *":
 				ctx.waitUntil(
 					Promise.all([
-						pollOperations(env).catch((err) =>
-							console.error(`[pollOperations] Fatal: ${err}`),
-						),
-						pollDisruptions(env).catch((err) =>
-							console.error(`[pollDisruptions] Fatal: ${err}`),
-						),
+						fireModalTrigger(MODAL_POLL_OPERATIONS_URL, env.TRIGGER_TOKEN),
+						fireModalTrigger(MODAL_POLL_DISRUPTIONS_URL, env.TRIGGER_TOKEN),
 					]),
 				);
 				break;
 
 			case "0 2 * * *":
-				ctx.waitUntil(
-					syncDaily(env).catch((err) =>
-						console.error(`[syncDaily] Fatal: ${err}`),
-					),
-				);
+				ctx.waitUntil(fireModalTrigger(MODAL_SYNC_DAILY_URL, env.TRIGGER_TOKEN));
 				break;
 
 			default:
