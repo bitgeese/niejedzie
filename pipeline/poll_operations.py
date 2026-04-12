@@ -66,7 +66,7 @@ def _trim_top_delayed(
 
 def _batch_in_chunks(statements: list[tuple]) -> None:
     for i in range(0, len(statements), _D1_CHUNK):
-        cf_d1.batch(statements[i : i + _D1_CHUNK])
+        cf_d1.bulk_insert(statements[i : i + _D1_CHUNK])
 
 
 # ---------------------------------------------------------------------------

@@ -23,7 +23,7 @@ _D1_CHUNK = 25
 def _batch_in_chunks(statements: list[tuple]) -> None:
     """Execute D1 batch statements in chunks of _D1_CHUNK."""
     for i in range(0, len(statements), _D1_CHUNK):
-        cf_d1.batch(statements[i : i + _D1_CHUNK])
+        cf_d1.bulk_insert(statements[i : i + _D1_CHUNK])
 
 
 def sync_schedules_for_date(date: str) -> int:
